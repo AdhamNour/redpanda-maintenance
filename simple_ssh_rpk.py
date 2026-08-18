@@ -113,59 +113,240 @@ def parse_brokers(output: str):
     return brokers, main_broker
 
 
+def display_brokers(brokers):
+    print("\n" + "=" * 50)
+    print("BROKERS SUMMARY")
+    print("=" * 50)
+    if not brokers:
+        print("No brokers available.")
+        return
+    for b in brokers:
+        marker = " [MAIN / CONTROLLER *]" if b["is_main"] else ""
+        print(f" - Broker ID: {b['id']:<3} | Host: {b['host']:<15} | Port: {b['port']}{marker}")
+
+
+def display_main_broker(main_broker):
+    print("\n" + "=" * 50)
+    print("MAIN NODE (CONTROLLER)")
+    print("=" * 50)
+    if main_broker:
+        print(f" - Broker ID : {main_broker['id']}")
+        print(f" - Host      : {main_broker['host']}")
+        print(f" - Port      : {main_broker['port']}")
+        if "rack" in main_broker:
+            print(f" - Rack      : {main_broker['rack']}")
+    else:
+        print("[!] No main broker marked with '*' found.")
+
+
+def handle_enable_maintenance(ssh, sasl_flags, brokers):
+    print("\n" + "=" * 50)
+    print("ENABLE MAINTENANCE MODE")
+    print("=" * 50)
+    print("Description: Places a broker into maintenance mode and waits (--wait)")
+    print("until partition leader transfers and draining are complete.")
+    print("-" * 50)
+
+    if brokers:
+        valid_ids = [str(b['id']) for b in brokers]
+        print(f"Available Broker IDs: {', '.join(valid_ids)}")
+
+    try:
+        node_id_input = input("Enter Node ID to enable maintenance for (or 'c' to cancel): ").strip()
+    except (KeyboardInterrupt, EOFError):
+        print("\nOperation cancelled.")
+        return
+
+    if not node_id_input or node_id_input.lower() in ("c", "cancel"):
+        print("Operation cancelled.")
+        return
+
+    try:
+        node_id = int(node_id_input)
+    except ValueError:
+        print(f"[!] Invalid Node ID: '{node_id_input}'. Must be an integer.", file=sys.stderr)
+        return
+
+    cmd = f"rpk cluster maintenance enable {node_id} --wait {sasl_flags}"
+    print(f"\n[*] Executing: rpk cluster maintenance enable {node_id} --wait ...")
+    print("[*] Waiting for broker to safely enter maintenance mode...")
+
+    stdin, stdout, stderr = ssh.exec_command(cmd)
+    out = stdout.read().decode("utf-8")
+    err = stderr.read().decode("utf-8")
+
+    if out:
+        print(out.strip())
+    if err:
+        print(f"Stderr: {err}", file=sys.stderr)
+
+
+def handle_disable_maintenance(ssh, sasl_flags, brokers):
+    print("\n" + "=" * 50)
+    print("DISABLE MAINTENANCE MODE")
+    print("=" * 50)
+    print("Description: Takes a broker out of maintenance mode, returning it")
+    print("to active cluster participation.")
+    print("-" * 50)
+
+    if brokers:
+        valid_ids = [str(b['id']) for b in brokers]
+        print(f"Available Broker IDs: {', '.join(valid_ids)}")
+
+    try:
+        node_id_input = input("Enter Node ID to disable maintenance for (or 'c' to cancel): ").strip()
+    except (KeyboardInterrupt, EOFError):
+        print("\nOperation cancelled.")
+        return
+
+    if not node_id_input or node_id_input.lower() in ("c", "cancel"):
+        print("Operation cancelled.")
+        return
+
+    try:
+        node_id = int(node_id_input)
+    except ValueError:
+        print(f"[!] Invalid Node ID: '{node_id_input}'. Must be an integer.", file=sys.stderr)
+        return
+
+    cmd = f"rpk cluster maintenance disable {node_id} {sasl_flags}"
+    print(f"\n[*] Executing: rpk cluster maintenance disable {node_id} ...")
+
+    stdin, stdout, stderr = ssh.exec_command(cmd)
+    out = stdout.read().decode("utf-8")
+    err = stderr.read().decode("utf-8")
+
+    if out:
+        print(out.strip())
+    if err:
+        print(f"Stderr: {err}", file=sys.stderr)
+
+
+def interactive_menu(ssh, sasl_flags, brokers, main_broker):
+    info_command = f"rpk cluster info {sasl_flags}"
+    health_command = f"rpk cluster health {sasl_flags}"
+    maint_command = f"rpk cluster maintenance status {sasl_flags}"
+
+    while True:
+        print("\n" + "=" * 50)
+        print("COMMAND MENU")
+        print("=" * 50)
+        print(" [1] List all brokers")
+        print(" [2] Identify main node (controller)")
+        print(" [3] Get cluster health (rpk cluster health)")
+        print(" [4] Check cluster maintenance status (rpk cluster maintenance status)")
+        print(" [5] Enable maintenance mode on a node (rpk cluster maintenance enable <NODE_ID> --wait)")
+        print(" [6] Disable maintenance mode on a node (rpk cluster maintenance disable <NODE_ID>)")
+        print(" [7] Refresh cluster data")
+        print(" [8] Exit")
+        print("-" * 50)
+
+        try:
+            choice = input("Select a command [1-8]: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print("\nExiting...")
+            break
+
+        if choice == "1":
+            display_brokers(brokers)
+        elif choice == "2":
+            display_main_broker(main_broker)
+        elif choice == "3":
+            print("\n" + "=" * 50)
+            print("CLUSTER HEALTH")
+            print("=" * 50)
+            stdin, stdout, stderr = ssh.exec_command(health_command)
+            out = stdout.read().decode("utf-8")
+            err = stderr.read().decode("utf-8")
+            if out:
+                print(out.strip())
+            elif err:
+                print(f"Error executing 'rpk cluster health': {err}", file=sys.stderr)
+        elif choice == "4":
+            print("\n" + "=" * 50)
+            print("CLUSTER MAINTENANCE STATUS")
+            print("=" * 50)
+            stdin, stdout, stderr = ssh.exec_command(maint_command)
+            out = stdout.read().decode("utf-8")
+            err = stderr.read().decode("utf-8")
+            if out:
+                print(out.strip())
+            elif err:
+                print(f"Error executing 'rpk cluster maintenance status': {err}", file=sys.stderr)
+        elif choice == "5":
+            handle_enable_maintenance(ssh, sasl_flags, brokers)
+        elif choice == "6":
+            handle_disable_maintenance(ssh, sasl_flags, brokers)
+        elif choice == "7":
+            print("\nRefreshing cluster data...")
+            stdin, stdout, stderr = ssh.exec_command(info_command)
+            out = stdout.read().decode("utf-8")
+            err = stderr.read().decode("utf-8")
+            new_brokers, new_main = parse_brokers(out)
+            if new_brokers:
+                brokers, main_broker = new_brokers, new_main
+                print(f"[+] Successfully refreshed. Found {len(brokers)} broker(s).")
+                display_brokers(brokers)
+            else:
+                print("[-] Failed to refresh broker list.", file=sys.stderr)
+                if err:
+                    print(f"Stderr: {err}", file=sys.stderr)
+        elif choice in ("8", "exit", "quit", "q"):
+            print("Exiting...")
+            break
+        else:
+            print("[!] Invalid option. Please enter a number between 1 and 8.")
+
+
+
 def main():
     args = parse_arguments()
 
-    # Safely escape parameters for the remote bash command
-    command = (
-        f"rpk cluster info "
+    # SASL flags for rpk commands
+    sasl_flags = (
         f"-X user={shlex.quote(args.sasl_user)} "
         f"-X pass={shlex.quote(args.sasl_password)} "
         f"-X sasl.mechanism={shlex.quote(args.sasl_mechanism)}"
     )
 
+    info_command = f"rpk cluster info {sasl_flags}"
+
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     try:
+        print(f"Connecting to {args.ssh_user}@{args.host}:{args.port}...")
         ssh.connect(
             hostname=args.host,
             port=args.port,
             username=args.ssh_user,
             password=args.ssh_password
         )
+        print("[+] Connected successfully.")
 
-        stdin, stdout, stderr = ssh.exec_command(command)
+        # Initial fetch of cluster info (Brokers)
+        stdin, stdout, stderr = ssh.exec_command(info_command)
+        info_output = stdout.read().decode("utf-8")
+        info_errors = stderr.read().decode("utf-8")
 
-        output = stdout.read().decode("utf-8")
-        errors = stderr.read().decode("utf-8")
-
-        if errors and not output:
-            print(f"Error executing command: {errors}", file=sys.stderr)
+        if info_errors and not info_output:
+            print(f"Error executing 'rpk cluster info': {info_errors}", file=sys.stderr)
             sys.exit(1)
 
-        brokers, main_broker = parse_brokers(output)
+        brokers, main_broker = parse_brokers(info_output)
 
         if not brokers:
             print("No brokers found in the cluster output.", file=sys.stderr)
-            if errors:
-                print(f"Stderr: {errors}", file=sys.stderr)
+            if info_errors:
+                print(f"Stderr: {info_errors}", file=sys.stderr)
             sys.exit(1)
 
-        print("=" * 50)
-        print("BROKERS SUMMARY")
-        print("=" * 50)
-        for b in brokers:
-            marker = " [MAIN / CONTROLLER *]" if b["is_main"] else ""
-            print(f" - Broker ID: {b['id']:<3} | Host: {b['host']:<15} | Port: {b['port']}{marker}")
+        # Show initial broker summary & main broker
+        display_brokers(brokers)
+        display_main_broker(main_broker)
 
-        if main_broker:
-            print("\n[*] Main Broker Identified (marked with *):")
-            print(f"    Broker ID : {main_broker['id']}")
-            print(f"    Host      : {main_broker['host']}")
-            print(f"    Port      : {main_broker['port']}")
-        else:
-            print("\n[!] No main broker marked with '*' found in output.")
+        # Launch interactive menu loop
+        interactive_menu(ssh, sasl_flags, brokers, main_broker)
 
     finally:
         ssh.close()
@@ -173,5 +354,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
