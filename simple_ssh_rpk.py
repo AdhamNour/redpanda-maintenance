@@ -1,13 +1,59 @@
 #!/usr/bin/env python3
+import argparse
 import re
+import shlex
+import sys
 import paramiko
 
-# Configuration
-HOST = "10.109.116.20"       # Replace with your server IP / hostname
-PORT = 22
-USERNAME = "anhassan"   # Replace with your SSH username
-PASSWORD = "TRqRZnDhj111af00YR55"   # Replace with your SSH password
-COMMAND = "rpk cluster info -X user=EjadaDataManagment -X pass='ecgtZSdmR@B8!GgT' -X sasl.mechanism=SCRAM-SHA-256"
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="SSH into a Redpanda host and fetch broker information via 'rpk cluster info'."
+    )
+    parser.add_argument(
+        "-H", "--host",
+        dest="host",
+        required=True,
+        help="SSH Remote host IP or hostname ([IP_ADDRESS])."
+    )
+    parser.add_argument(
+        "-P", "--port",
+        dest="port",
+        type=int,
+        default=22,
+        help="SSH port (default: 22)."
+    )
+    parser.add_argument(
+        "-u", "--ssh-user",
+        dest="ssh_user",
+        required=True,
+        help="SSH username ([SSH_USERNAME])."
+    )
+    parser.add_argument(
+        "-p", "--ssh-password",
+        dest="ssh_password",
+        required=True,
+        help="SSH password ([SSH_PASSWORD])."
+    )
+    parser.add_argument(
+        "--sasl-user",
+        dest="sasl_user",
+        required=True,
+        help="Redpanda SASL username ([SASL_USERNAME])."
+    )
+    parser.add_argument(
+        "--sasl-password",
+        dest="sasl_password",
+        required=True,
+        help="Redpanda SASL password ([SASL_PASSWORD])."
+    )
+    parser.add_argument(
+        "--sasl-mechanism",
+        dest="sasl_mechanism",
+        default="SCRAM-SHA-256",
+        help="SASL mechanism (default: SCRAM-SHA-256)."
+    )
+    return parser.parse_args()
 
 
 def parse_brokers(output: str):
@@ -68,51 +114,58 @@ def parse_brokers(output: str):
 
 
 def main():
-    # Initialize SSH Client
+    args = parse_arguments()
+
+    # Safely escape parameters for the remote bash command
+    command = (
+        f"rpk cluster info "
+        f"-X user={shlex.quote(args.sasl_user)} "
+        f"-X pass={shlex.quote(args.sasl_password)} "
+        f"-X sasl.mechanism={shlex.quote(args.sasl_mechanism)}"
+    )
+
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
     try:
-        print(f"Connecting to {USERNAME}@{HOST}...")
         ssh.connect(
-            hostname=HOST,
-            port=PORT,
-            username=USERNAME,
-            password=PASSWORD
+            hostname=args.host,
+            port=args.port,
+            username=args.ssh_user,
+            password=args.ssh_password
         )
 
-        print(f"Running command: {COMMAND}")
-        stdin, stdout, stderr = ssh.exec_command(COMMAND)
+        stdin, stdout, stderr = ssh.exec_command(command)
 
-        # Fetch and display output
-        output = stdout.read().decode()
-        errors = stderr.read().decode()
+        output = stdout.read().decode("utf-8")
+        errors = stderr.read().decode("utf-8")
 
-        if output:
-            print("\n--- Output ---")
-            print(output)
+        if errors and not output:
+            print(f"Error executing command: {errors}", file=sys.stderr)
+            sys.exit(1)
 
-            # Parse and display broker information
-            brokers, main_broker = parse_brokers(output)
+        brokers, main_broker = parse_brokers(output)
 
-            print("\n" + "=" * 50)
-            print("PARSED BROKERS SUMMARY")
-            print("=" * 50)
-            for b in brokers:
-                marker = " [MAIN / CONTROLLER *]" if b["is_main"] else ""
-                print(f" - Broker ID: {b['id']:<3} | Host: {b['host']:<15} | Port: {b['port']}{marker}")
+        if not brokers:
+            print("No brokers found in the cluster output.", file=sys.stderr)
+            if errors:
+                print(f"Stderr: {errors}", file=sys.stderr)
+            sys.exit(1)
 
-            if main_broker:
-                print("\n[*] Main Broker Identified (marked with *):")
-                print(f"    Broker ID : {main_broker['id']}")
-                print(f"    Host      : {main_broker['host']}")
-                print(f"    Port      : {main_broker['port']}")
-            else:
-                print("\n[!] No main broker marked with '*' found in output.")
+        print("=" * 50)
+        print("BROKERS SUMMARY")
+        print("=" * 50)
+        for b in brokers:
+            marker = " [MAIN / CONTROLLER *]" if b["is_main"] else ""
+            print(f" - Broker ID: {b['id']:<3} | Host: {b['host']:<15} | Port: {b['port']}{marker}")
 
-        if errors:
-            print("\n--- Errors ---")
-            print(errors)
+        if main_broker:
+            print("\n[*] Main Broker Identified (marked with *):")
+            print(f"    Broker ID : {main_broker['id']}")
+            print(f"    Host      : {main_broker['host']}")
+            print(f"    Port      : {main_broker['port']}")
+        else:
+            print("\n[!] No main broker marked with '*' found in output.")
 
     finally:
         ssh.close()
@@ -120,4 +173,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
