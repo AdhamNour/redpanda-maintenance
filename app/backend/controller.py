@@ -2,6 +2,7 @@ import datetime
 import threading
 from typing import Any, Dict, List, Optional
 from PySide6.QtCore import QObject, Property, Signal, Slot
+from PySide6.QtWidgets import QApplication
 
 from app.backend.broker_monitor import BrokerHealthMonitor
 from app.backend.database import DatabaseManager
@@ -23,6 +24,7 @@ class AppController(QObject):
     busyStateChanged = Signal()
     logAppended = Signal(str, str, str) # timestamp, level (INFO/SUCCESS/ERROR), message
     operationFinished = Signal(str, bool, str) # operation_name, success, message
+    maintenanceSucceeded = Signal(int, str) # node_id, broker_host
 
     def __init__(self, db_manager: Optional[DatabaseManager] = None):
         super().__init__()
@@ -258,53 +260,75 @@ class AppController(QObject):
         self._set_busy(True, "Refreshing cluster data...")
 
         def worker():
-            sasl_flags = self.ssh.get_sasl_flags(self._current_profile)
+            try:
+                sasl_flags = self.ssh.get_sasl_flags(self._current_profile)
 
-            # 1. Fetch brokers info
-            info_cmd = f"rpk cluster info {sasl_flags}"
-            self._log("INFO", f"Executing: {info_cmd}")
-            code, out, err = self.ssh.execute_command(info_cmd)
+                # 1. Fetch brokers info
+                info_cmd = f"rpk cluster info {sasl_flags}"
+                self._log("INFO", f"Executing: {info_cmd}")
+                code, out, err = self.ssh.execute_command(info_cmd)
 
-            if out:
-                new_brokers, new_main = parse_brokers(out)
-                for b in new_brokers:
-                    b["ssh_status"] = "CONNECTED"
-                self._brokers = new_brokers
-                self._controller_broker = new_main or {}
+                if out:
+                    new_brokers, new_main = parse_brokers(out)
+                    for b in new_brokers:
+                        b["ssh_status"] = "CONNECTED"
+                    self._brokers = new_brokers
+                    self._controller_broker = new_main or {}
+                    self.clusterDataChanged.emit()
+                    self._log("SUCCESS", f"Fetched {len(new_brokers)} broker(s).")
+                    # Keep active broker SSH connections preserved
+                    self.monitor.update_or_start(self._current_profile, self._brokers)
+                elif err:
+                    self._log("ERROR", f"rpk cluster info failed: {err}")
+
+                # 2. Fetch maintenance status to enrich broker state
+                maint_cmd = f"rpk cluster maintenance status {sasl_flags}"
+                code_m, out_m, err_m = self.ssh.execute_command(maint_cmd)
+                if out_m:
+                    self._maintenance_list = parse_maintenance_status(out_m)
+                    # Enrich brokers with maintenance status
+                    maint_map = {m["node_id"]: m for m in self._maintenance_list}
+                    for b in self._brokers:
+                        if b["id"] in maint_map:
+                            m_info = maint_map[b["id"]]
+                            b["maintenance_state"] = m_info["status"]
+                            b["draining"] = m_info["draining"]
+                            b["finished"] = m_info["finished"]
+                        else:
+                            # Node not in maintenance status output → it's fully ACTIVE
+                            b["maintenance_state"] = "ACTIVE"
+                            b["draining"] = False
+                            b["finished"] = False
+                    self.maintenanceDataChanged.emit()
+                elif err_m:
+                    self._log("ERROR", f"rpk cluster maintenance status failed: {err_m}")
+
+                # Force a fresh list reference so QML's Repeater re-evaluates all delegate bindings
+                self._brokers = [dict(b) for b in self._brokers]
                 self.clusterDataChanged.emit()
-                self._log("SUCCESS", f"Fetched {len(new_brokers)} broker(s).")
-                # Start multi-broker SSH health monitoring
-                self.monitor.start_monitoring(self._current_profile, self._brokers)
-            elif err:
-                self._log("ERROR", f"rpk cluster info failed: {err}")
 
-            # 2. Fetch maintenance status to enrich broker state
-            maint_cmd = f"rpk cluster maintenance status {sasl_flags}"
-            code, out_m, err_m = self.ssh.execute_command(maint_cmd)
-            if out_m:
-                self._maintenance_list = parse_maintenance_status(out_m)
-                # Enrich brokers with maintenance status
-                maint_map = {m["node_id"]: m for m in self._maintenance_list}
-                for b in self._brokers:
-                    if b["id"] in maint_map:
-                        m_info = maint_map[b["id"]]
-                        b["maintenance_state"] = m_info["status"]
-                        b["draining"] = m_info["draining"]
-                        b["finished"] = m_info["finished"]
-                self.clusterDataChanged.emit()
-                self.maintenanceDataChanged.emit()
+                # 3. Fetch cluster health
+                health_cmd = f"rpk cluster health {sasl_flags}"
+                code_h, out_h, err_h = self.ssh.execute_command(health_cmd)
+                if out_h:
+                    self._health_info = parse_cluster_health(out_h)
+                    self.healthDataChanged.emit()
 
-            # 3. Fetch cluster health
-            health_cmd = f"rpk cluster health {sasl_flags}"
-            code, out_h, err_h = self.ssh.execute_command(health_cmd)
-            if out_h:
-                self._health_info = parse_cluster_health(out_h)
-                self.healthDataChanged.emit()
-
-            self._set_busy(False)
-            self.operationFinished.emit("refresh", True, "Cluster data refreshed.")
+                self.operationFinished.emit("refresh", True, "Cluster data refreshed.")
+            except Exception as e:
+                self._log("ERROR", f"Error refreshing cluster data: {e}")
+                self.operationFinished.emit("refresh", False, str(e))
+            finally:
+                self._set_busy(False)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    @Slot(str)
+    def copyToClipboard(self, text: str):
+        """Copies given text to the system clipboard."""
+        if text:
+            QApplication.clipboard().setText(text)
+            self._log("INFO", f"Copied to clipboard: {text}")
 
     @Slot(int)
     def enableMaintenance(self, node_id: int):
@@ -327,7 +351,25 @@ class AppController(QObject):
 
             self._set_busy(False)
             if code == 0:
-                self._log("SUCCESS", f"Node {node_id} is now in maintenance mode.")
+                # Find broker IP/host
+                broker_host = ""
+                for b in self._brokers:
+                    if b.get("id") == node_id:
+                        broker_host = b.get("host", "")
+                        break
+
+                # Copy IP to system clipboard
+                if broker_host:
+                    QApplication.clipboard().setText(broker_host)
+
+                # Show native desktop notification
+                self.notifier.notify(
+                    f"🛠️ Node {node_id} in Maintenance",
+                    f"Node {node_id} ({broker_host}) safely drained & entered maintenance mode.\nIP: {broker_host} (Copied to clipboard)",
+                    level="info"
+                )
+
+                self._log("SUCCESS", f"Node {node_id} ({broker_host}) entered maintenance mode. IP copied to clipboard.")
                 self.db.log_activity(
                     self._current_profile.get("id"),
                     cmd,
@@ -335,6 +377,7 @@ class AppController(QObject):
                     "SUCCESS",
                     out
                 )
+                self.maintenanceSucceeded.emit(node_id, broker_host)
                 self.operationFinished.emit("enable_maintenance", True, f"Node {node_id} entered maintenance mode.")
             else:
                 self._log("ERROR", f"Failed to enable maintenance on Node {node_id}: {err}")

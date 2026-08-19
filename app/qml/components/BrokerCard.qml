@@ -7,6 +7,7 @@ Rectangle {
 
     property var broker: ({})
     property bool isBusy: false
+    property int pendingNodeId: -1
 
     signal enableMaintenanceRequested(int nodeId)
     signal disableMaintenanceRequested(int nodeId)
@@ -173,24 +174,45 @@ Rectangle {
             Button {
                 id: maintBtn
                 Layout.fillWidth: true
-                implicitHeight: 34
-                enabled: !root.isBusy
+                implicitHeight: 36
 
                 property bool inMaint: (broker.maintenance_state || "").toUpperCase() === "IN MAINTENANCE" || (broker.maintenance_state || "").toUpperCase() === "DRAINING"
+                property bool isDraining: root.isBusy && (root.pendingNodeId === broker.id)
+                enabled: !maintBtn.isDraining
 
-                contentItem: Text {
-                    text: maintBtn.inMaint ? "Exit Maintenance" : "Enter Maintenance Mode"
-                    color: maintBtn.enabled ? (maintBtn.inMaint ? "#10B981" : "#F04D23") : "#666677"
-                    font.pixelSize: 12
-                    font.bold: true
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
+                contentItem: RowLayout {
+                    spacing: 6
+                    anchors.centerIn: parent
+
+                    Text {
+                        text: maintBtn.isDraining ? "⏳" : (maintBtn.inMaint ? "🟢" : "🛠️")
+                        font.pixelSize: 12
+                    }
+
+                    Text {
+                        text: maintBtn.isDraining
+                              ? "Draining partitions..."
+                              : (maintBtn.inMaint ? "Exit Maintenance Mode" : "Enter Maintenance Mode")
+                        color: maintBtn.isDraining
+                               ? "#A1A1AA"
+                               : (maintBtn.inMaint ? "#34D399" : "#FFFFFF")
+                        font.pixelSize: 12
+                        font.bold: true
+                    }
                 }
 
                 background: Rectangle {
                     radius: 6
-                    color: maintBtn.down ? "#14141A" : (maintBtn.hovered ? "#22222E" : "#17171F")
-                    border.color: maintBtn.inMaint ? "#059669" : "#F04D23"
+                    color: maintBtn.isDraining
+                           ? "#1E1E2C"
+                           : (maintBtn.down
+                              ? "#14141A"
+                              : (maintBtn.hovered
+                                 ? (maintBtn.inMaint ? "#064E3B" : "#FF653D")
+                                 : (maintBtn.inMaint ? "#065F46" : "#F04D23")))
+                    border.color: maintBtn.isDraining
+                                  ? "#F59E0B"
+                                  : (maintBtn.inMaint ? "#10B981" : "#F04D23")
                     border.width: 1
                 }
 
@@ -205,3 +227,4 @@ Rectangle {
         }
     }
 }
+

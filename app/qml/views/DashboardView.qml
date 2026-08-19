@@ -9,6 +9,18 @@ Item {
     signal requestEnableMaintenance(int nodeId)
     signal requestDisableMaintenance(int nodeId)
 
+    // Tracks which node is actively being put into maintenance (-1 = none)
+    property int pendingMaintenanceNodeId: -1
+
+    Connections {
+        target: appController
+        function onOperationFinished(operation, success, message) {
+            if (operation === "enable_maintenance" || operation === "disable_maintenance") {
+                root.pendingMaintenanceNodeId = -1;
+            }
+        }
+    }
+
     ScrollView {
         anchors.fill: parent
         clip: true
@@ -226,9 +238,16 @@ Item {
                     delegate: BrokerCard {
                         broker: modelData
                         isBusy: appController.isBusy
+                        pendingNodeId: root.pendingMaintenanceNodeId
 
-                        onEnableMaintenanceRequested: root.requestEnableMaintenance(nodeId)
-                        onDisableMaintenanceRequested: root.requestDisableMaintenance(nodeId)
+                        onEnableMaintenanceRequested: {
+                            root.pendingMaintenanceNodeId = nodeId;
+                            root.requestEnableMaintenance(nodeId);
+                        }
+                        onDisableMaintenanceRequested: {
+                            root.pendingMaintenanceNodeId = nodeId;
+                            root.requestDisableMaintenance(nodeId);
+                        }
                     }
                 }
             }

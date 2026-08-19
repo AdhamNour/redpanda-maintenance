@@ -142,10 +142,9 @@ Item {
                                 Item { Layout.fillWidth: true }
 
                                 Button {
-                                    Layout.preferredWidth: 140
-                                    implicitHeight: 28
+                                    Layout.preferredWidth: 150
+                                    implicitHeight: 30
                                     enabled: !appController.isBusy
-                                    text: modelData.status === "ACTIVE" ? "Enter Maintenance" : "Exit Maintenance"
                                     onClicked: {
                                         if (modelData.status === "ACTIVE") {
                                             root.requestEnableMaintenance(modelData.node_id);
@@ -154,8 +153,12 @@ Item {
                                         }
                                     }
                                     contentItem: Text {
-                                        text: modelData.status === "ACTIVE" ? "Enter Maintenance" : "Exit Maintenance"
-                                        color: modelData.status === "ACTIVE" ? "#F04D23" : "#10B981"
+                                        text: appController.isBusy
+                                              ? "⏳ Working..."
+                                              : (modelData.status === "ACTIVE" ? "Enter Maintenance" : "Exit Maintenance")
+                                        color: appController.isBusy
+                                               ? "#A1A1AA"
+                                               : "#FFFFFF"
                                         font.bold: true
                                         font.pixelSize: 11
                                         horizontalAlignment: Text.AlignHCenter
@@ -163,7 +166,11 @@ Item {
                                     }
                                     background: Rectangle {
                                         radius: 4
-                                        color: parent.hovered ? "#242432" : "#181822"
+                                        color: appController.isBusy
+                                               ? "#242432"
+                                               : (modelData.status === "ACTIVE"
+                                                  ? (parent.hovered ? "#FF653D" : "#F04D23")
+                                                  : (parent.hovered ? "#059669" : "#10B981"))
                                         border.color: modelData.status === "ACTIVE" ? "#F04D23" : "#059669"
                                     }
                                 }

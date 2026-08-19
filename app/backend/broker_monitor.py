@@ -26,7 +26,7 @@ class BrokerHealthMonitor(QObject):
         self._ssh_clients: Dict[int, paramiko.SSHClient] = {}
         self._broker_states: Dict[int, str] = {} # node_id -> "CONNECTED" | "DISCONNECTED"
 
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._monitor_thread: Optional[threading.Thread] = None
 
@@ -41,6 +41,15 @@ class BrokerHealthMonitor(QObject):
 
             self._monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True)
             self._monitor_thread.start()
+
+    def update_or_start(self, profile: Dict[str, Any], brokers: List[Dict[str, Any]]) -> None:
+        """Starts monitoring if not running, or updates broker list while keeping active SSH connections."""
+        with self._lock:
+            if self._monitor_thread is None or not self._monitor_thread.is_alive():
+                self.start_monitoring(profile, brokers)
+            else:
+                self._profile = profile
+                self._monitored_brokers = list(brokers)
 
     def update_brokers(self, brokers: List[Dict[str, Any]]) -> None:
         """Updates the list of brokers to monitor without restarting the thread."""

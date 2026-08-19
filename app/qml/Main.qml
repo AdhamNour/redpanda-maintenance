@@ -21,6 +21,18 @@ ApplicationWindow {
     property int pendingMaintenanceNodeId: -1
     property bool pendingIsEnable: true
 
+    // State for floating Maintenance Toast Banner
+    property string toastMessage: ""
+    property string toastIp: ""
+    property bool toastVisible: false
+    property bool toastCopied: false
+
+    Timer {
+        id: toastTimer
+        interval: 8000
+        onTriggered: window.toastVisible = false
+    }
+
     Connections {
         target: appController
         function onLogAppended(timestamp, level, message) {
@@ -28,6 +40,13 @@ ApplicationWindow {
             newArr.push({ "timestamp": timestamp, "level": level, "message": message });
             if (newArr.length > 500) newArr.shift();
             window.logItems = newArr;
+        }
+        function onMaintenanceSucceeded(nodeId, brokerHost) {
+            window.toastMessage = "Node " + nodeId + " is in maintenance mode.";
+            window.toastIp = brokerHost;
+            window.toastCopied = false;
+            window.toastVisible = true;
+            toastTimer.restart();
         }
     }
 
@@ -332,6 +351,96 @@ ApplicationWindow {
             Layout.fillWidth: true
             logModel: window.logItems
             onClearRequested: window.logItems = []
+        }
+    }
+
+    // Floating Maintenance Success Toast Banner
+    Rectangle {
+        id: toastBanner
+        visible: window.toastVisible
+        anchors.top: parent.top
+        anchors.topMargin: window.toastVisible ? 76 : -80
+        anchors.horizontalCenter: parent.horizontalCenter
+        implicitWidth: Math.min(parent.width - 40, 520)
+        implicitHeight: 52
+        radius: 10
+        color: "#181824"
+        border.color: "#10B981"
+        border.width: 1
+        z: 999
+
+        Behavior on anchors.topMargin {
+            NumberAnimation { duration: 250; easing.type: Easing.OutCubic }
+        }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 16
+            anchors.rightMargin: 16
+            spacing: 12
+
+            Text {
+                text: "🛠️"
+                font.pixelSize: 16
+            }
+
+            ColumnLayout {
+                spacing: 1
+                Text {
+                    text: window.toastMessage
+                    color: "#FFFFFF"
+                    font.bold: true
+                    font.pixelSize: 13
+                }
+                Text {
+                    text: "IP: " + window.toastIp + (window.toastCopied ? " (Copied to clipboard!)" : "")
+                    color: "#34D399"
+                    font.pixelSize: 11
+                    font.family: "Cascadia Code, Consolas, monospace"
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+
+            Button {
+                implicitHeight: 30
+                implicitWidth: 90
+                onClicked: {
+                    appController.copyToClipboard(window.toastIp);
+                    window.toastCopied = true;
+                }
+                contentItem: Text {
+                    text: window.toastCopied ? "✓ Copied" : "📋 Copy IP"
+                    color: window.toastCopied ? "#34D399" : "#FFFFFF"
+                    font.bold: true
+                    font.pixelSize: 11
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                background: Rectangle {
+                    radius: 6
+                    color: parent.hovered ? "#2D2D3E" : "#222230"
+                    border.color: window.toastCopied ? "#10B981" : "#45455E"
+                }
+            }
+
+            Button {
+                implicitHeight: 26
+                implicitWidth: 26
+                onClicked: window.toastVisible = false
+                contentItem: Text {
+                    text: "✕"
+                    color: "#A1A1AA"
+                    font.bold: true
+                    font.pixelSize: 11
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+                background: Rectangle {
+                    radius: 13
+                    color: parent.hovered ? "#333344" : "transparent"
+                }
+            }
         }
     }
 

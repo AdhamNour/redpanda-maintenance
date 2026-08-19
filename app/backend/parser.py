@@ -66,7 +66,12 @@ def parse_brokers(output: str) -> Tuple[List[Dict[str, Any]], Optional[Dict[str,
 def parse_maintenance_status(output: str) -> List[Dict[str, Any]]:
     """
     Parses the output of `rpk cluster maintenance status`.
-    Typical table columns: NODE-ID, DRAINING, FINISHED, ERRORS...
+    Actual rpk columns: NODE-ID  ENABLED  FINISHED  ERRORS  PARTITIONS  ELIGIBLE  TRANSFERRING  FAILED
+
+    Interpretation:
+      - enabled=true,  finished=true   → node has finished draining, fully IN MAINTENANCE
+      - enabled=true,  finished=false  → node is actively DRAINING partitions
+      - enabled=false                  → node is ACTIVE (not in maintenance)
     """
     results = []
     if not output:
@@ -75,7 +80,7 @@ def parse_maintenance_status(output: str) -> List[Dict[str, Any]]:
     lines = output.strip().splitlines()
     for line in lines:
         line = line.strip()
-        if not line or line.upper().startswith("NODE") or line.startswith("="):
+        if not line or line.upper().startswith("NODE") or line.startswith("=") or line.startswith("-"):
             continue
 
         parts = line.split()
@@ -85,22 +90,26 @@ def parse_maintenance_status(output: str) -> List[Dict[str, Any]]:
             except ValueError:
                 continue
 
-            draining_str = parts[1].lower() if len(parts) > 1 else "false"
+            enabled_str = parts[1].lower() if len(parts) > 1 else "false"
             finished_str = parts[2].lower() if len(parts) > 2 else "false"
             errors_str = parts[3] if len(parts) > 3 else "none"
 
-            draining = draining_str in ("true", "yes", "1")
+            enabled = enabled_str in ("true", "yes", "1")
             finished = finished_str in ("true", "yes", "1")
 
-            status_label = "ACTIVE"
-            if finished:
+            # finished=true means draining completed → node is fully IN MAINTENANCE
+            # enabled=true, finished=false means still redistributing partitions
+            if enabled and finished:
                 status_label = "IN MAINTENANCE"
-            elif draining:
+            elif enabled and not finished:
                 status_label = "DRAINING"
+            else:
+                status_label = "ACTIVE"
 
             results.append({
                 "node_id": node_id,
-                "draining": draining,
+                "enabled": enabled,
+                "draining": enabled and not finished,
                 "finished": finished,
                 "status": status_label,
                 "errors": errors_str,
