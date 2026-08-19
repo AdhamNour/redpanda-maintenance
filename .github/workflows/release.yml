@@ -94,21 +94,20 @@ jobs:
         run: |
           python -m pip install --upgrade pip wheel
           pip install -r requirements.txt
-          pip install pyinstaller pillow
+          pip install pyinstaller
 
       # ──────────────────────────────────────────
-      # 2. Platform-native Icon Generation (no Qt)
+      # 2. Verify pre-committed icons are present
+      # (icons are generated locally via build_icons.py
+      #  and committed to the repository — not built in CI)
       # ──────────────────────────────────────────
-      - name: Generate native app icons
-        run: python build_icons.py
-
-      - name: Verify icons exist
+      - name: Verify icons are present
         shell: bash
         run: |
-          echo "=== Resources directory ==="
+          echo "=== app/resources/ ==="
           ls -lh app/resources/
-          [ -f "app/resources/icon.ico" ]  && echo "✅ icon.ico present"  || (echo "❌ icon.ico MISSING" && exit 1)
-          [ -f "app/resources/icon.icns" ] && echo "✅ icon.icns present" || (echo "❌ icon.icns MISSING" && exit 1)
+          [ -f "app/resources/icon.ico" ]  && echo "✅ icon.ico present"  || (echo "❌ icon.ico MISSING — run: python build_icons.py && git add app/resources/icon.ico app/resources/icon.icns" && exit 1)
+          [ -f "app/resources/icon.icns" ] && echo "✅ icon.icns present" || (echo "❌ icon.icns MISSING — run: python build_icons.py && git add app/resources/icon.ico app/resources/icon.icns" && exit 1)
           [ -f "app/resources/icon.png" ]  && echo "✅ icon.png present"  || (echo "❌ icon.png MISSING" && exit 1)
 
       # ──────────────────────────────────────────

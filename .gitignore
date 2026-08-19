@@ -56,9 +56,9 @@ Desktop.ini
 $RECYCLE.BIN/
 *.lnk
 
-# Generated icons (produced at build time from icon.png source)
-app/resources/icon.ico
-app/resources/icon.icns
+# Source icon — .ico and .icns are pre-generated locally and committed to the repo
+# app/resources/icon.ico   ← tracked
+# app/resources/icon.icns  ← tracked
 
 # Database files
 *.db

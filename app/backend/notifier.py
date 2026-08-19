@@ -19,6 +19,12 @@ def get_or_generate_app_icon(size: int = 256) -> QIcon:
     if icon_file.exists():
         return QIcon(str(icon_file))
 
+    # Ensure a QGuiApplication exists before creating QPixmap / QPainter
+    from PySide6.QtGui import QGuiApplication
+    _app = QGuiApplication.instance()
+    if _app is None:
+        _app = QGuiApplication(sys.argv if hasattr(sys, "argv") else [])
+
     # Generate the PandaPilot icon matching the UI logo
     pixmap = QPixmap(size, size)
     pixmap.fill(QColor(0, 0, 0, 0))
