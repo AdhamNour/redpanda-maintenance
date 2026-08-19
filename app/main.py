@@ -8,13 +8,26 @@ from PySide6.QtWidgets import QApplication
 
 from app.backend.controller import AppController
 from app.backend.database import DatabaseManager
+from app.backend.notifier import get_or_generate_app_icon
 
 
 def main():
+    # Set Windows AppUserModelID so custom taskbar icon displays properly on Windows
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("redpanda.pandapilot.desktop.1.0")
+        except Exception:
+            pass
+
     app = QApplication(sys.argv)
     app.setApplicationName("PandaPilot")
     app.setOrganizationName("PandaPilot")
     app.setApplicationDisplayName("PandaPilot - Redpanda Maintenance Cockpit")
+
+    # Set Application & Window Icon
+    app_icon = get_or_generate_app_icon()
+    app.setWindowIcon(app_icon)
 
     # Initialize SQLite Database & Backend Controller
     db_manager = DatabaseManager()
@@ -33,6 +46,11 @@ def main():
     if not engine.rootObjects():
         print(f"Error: Failed to load QML interface from {qml_path}", file=sys.stderr)
         sys.exit(-1)
+
+    # Set icon on the QQuickWindow root objects
+    for root_obj in engine.rootObjects():
+        if hasattr(root_obj, "setIcon"):
+            root_obj.setIcon(app_icon)
 
     sys.exit(app.exec())
 

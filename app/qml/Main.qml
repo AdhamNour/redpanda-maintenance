@@ -54,16 +54,15 @@ ApplicationWindow {
                 // Brand Logo & Title
                 RowLayout {
                     spacing: 10
-                    Rectangle {
-                        width: 36
-                        height: 36
-                        radius: 8
-                        color: "#F04D23"
-                        Text {
-                            anchors.centerIn: parent
-                            text: "🐼"
-                            font.pixelSize: 18
-                        }
+                    Image {
+                        Layout.preferredWidth: 36
+                        Layout.preferredHeight: 36
+                        sourceSize.width: 36
+                        sourceSize.height: 36
+                        source: "../resources/icon.png"
+                        mipmap: true
+                        smooth: true
+                        fillMode: Image.PreserveAspectFit
                     }
                     ColumnLayout {
                         spacing: 0

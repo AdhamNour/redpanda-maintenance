@@ -131,16 +131,15 @@ Item {
                                 anchors.margins: 12
                                 spacing: 10
 
-                                Rectangle {
-                                    width: 32
-                                    height: 32
-                                    radius: 6
-                                    color: "#13131A"
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "🐼"
-                                        font.pixelSize: 14
-                                    }
+                                Image {
+                                    Layout.preferredWidth: 32
+                                    Layout.preferredHeight: 32
+                                    sourceSize.width: 32
+                                    sourceSize.height: 32
+                                    source: "../../resources/icon.png"
+                                    mipmap: true
+                                    smooth: true
+                                    fillMode: Image.PreserveAspectFit
                                 }
 
                                 ColumnLayout {
