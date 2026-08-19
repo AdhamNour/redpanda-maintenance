@@ -135,7 +135,7 @@ Item {
 
                                 StatusBadge {
                                     label: modelData.status
-                                    type: modelData.status === "ACTIVE" ? "healthy" : "warning"
+                                    type: (modelData.status === "IN MAINTENANCE" || modelData.status === "DRAINING") ? "warning" : "muted"
                                     Layout.preferredWidth: 120
                                 }
 
@@ -146,16 +146,16 @@ Item {
                                     implicitHeight: 30
                                     enabled: !appController.isBusy
                                     onClicked: {
-                                        if (modelData.status === "ACTIVE") {
-                                            root.requestEnableMaintenance(modelData.node_id);
-                                        } else {
+                                        if (modelData.status === "IN MAINTENANCE" || modelData.status === "DRAINING") {
                                             root.requestDisableMaintenance(modelData.node_id);
+                                        } else {
+                                            root.requestEnableMaintenance(modelData.node_id);
                                         }
                                     }
                                     contentItem: Text {
                                         text: appController.isBusy
                                               ? "⏳ Working..."
-                                              : (modelData.status === "ACTIVE" ? "Enter Maintenance" : "Exit Maintenance")
+                                              : ((modelData.status === "IN MAINTENANCE" || modelData.status === "DRAINING") ? "Exit Maintenance" : "Enter Maintenance")
                                         color: appController.isBusy
                                                ? "#A1A1AA"
                                                : "#FFFFFF"
@@ -168,10 +168,10 @@ Item {
                                         radius: 4
                                         color: appController.isBusy
                                                ? "#242432"
-                                               : (modelData.status === "ACTIVE"
-                                                  ? (parent.hovered ? "#FF653D" : "#F04D23")
-                                                  : (parent.hovered ? "#059669" : "#10B981"))
-                                        border.color: modelData.status === "ACTIVE" ? "#F04D23" : "#059669"
+                                               : ((modelData.status === "IN MAINTENANCE" || modelData.status === "DRAINING")
+                                                  ? (parent.hovered ? "#059669" : "#10B981")
+                                                  : (parent.hovered ? "#FF653D" : "#F04D23"))
+                                        border.color: (modelData.status === "IN MAINTENANCE" || modelData.status === "DRAINING") ? "#059669" : "#F04D23"
                                     }
                                 }
                             }

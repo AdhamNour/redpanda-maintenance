@@ -164,12 +164,12 @@ Rectangle {
                     Layout.alignment: Qt.AlignRight
                 }
                 StatusBadge {
-                    label: broker.maintenance_state || "ACTIVE"
+                    label: broker.maintenance_state || "DISABLED"
                     type: {
-                        var st = (broker.maintenance_state || "ACTIVE").toUpperCase();
+                        var st = (broker.maintenance_state || "DISABLED").toUpperCase();
                         if (st === "IN MAINTENANCE") return "warning";
                         if (st === "DRAINING") return "warning";
-                        return "healthy";
+                        return "muted";
                     }
                 }
             }

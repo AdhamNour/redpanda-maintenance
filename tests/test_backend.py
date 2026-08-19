@@ -143,7 +143,7 @@ NODE-ID  DRAINING  FINISHED  ERRORS
         self.assertEqual(len(status_list), 3)
         self.assertEqual(status_list[0]["status"], "IN MAINTENANCE")
         self.assertEqual(status_list[1]["status"], "DRAINING")
-        self.assertEqual(status_list[2]["status"], "ACTIVE")
+        self.assertEqual(status_list[2]["status"], "DISABLED")
 
 
 from unittest.mock import MagicMock, patch
@@ -190,7 +190,7 @@ class TestAppControllerProfileSwitching(unittest.TestCase):
         self.controller._brokers = [{"id": 0, "host": "10.0.0.1", "port": 9092}]
         self.controller._controller_broker = {"id": 0}
         self.controller._health_info = {"is_healthy": True, "status_text": "HEALTHY"}
-        self.controller._maintenance_list = [{"node_id": 0, "status": "ACTIVE"}]
+        self.controller._maintenance_list = [{"node_id": 0, "status": "DISABLED"}]
 
         profile_changed_called = []
         cluster_changed_called = []

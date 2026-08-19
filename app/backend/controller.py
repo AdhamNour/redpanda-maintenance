@@ -392,8 +392,8 @@ class AppController(QObject):
                             b["draining"] = m_info["draining"]
                             b["finished"] = m_info["finished"]
                         else:
-                            # Node not in maintenance status output → it's fully ACTIVE
-                            b["maintenance_state"] = "ACTIVE"
+                            # Node not in maintenance status output → it's not in maintenance mode
+                            b["maintenance_state"] = "DISABLED"
                             b["draining"] = False
                             b["finished"] = False
                     self.maintenanceDataChanged.emit()

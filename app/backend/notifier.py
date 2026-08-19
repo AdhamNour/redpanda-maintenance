@@ -241,7 +241,7 @@ class NotificationManager(QObject):
                 for b in brokers:
                     node_id = b.get("id", 0)
                     host = b.get("host", "0.0.0.0")
-                    maint_state = (b.get("maintenance_state") or "ACTIVE").upper()
+                    maint_state = (b.get("maintenance_state") or "DISABLED").upper()
                     in_maint = maint_state in ("IN MAINTENANCE", "DRAINING")
 
                     icon_prefix = "🛠️" if in_maint else "🟢"

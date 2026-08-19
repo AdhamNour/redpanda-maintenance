@@ -51,7 +51,7 @@ def parse_brokers(output: str) -> Tuple[List[Dict[str, Any]], Optional[Dict[str,
                     "is_main": is_main,
                     "raw_id": raw_id,
                     "rack": parts[3] if len(parts) > 3 else "N/A",
-                    "maintenance_state": "ACTIVE", # Will be updated with maintenance status
+                    "maintenance_state": "DISABLED", # Will be updated with maintenance status
                     "draining": False,
                     "finished": False,
                 }
@@ -104,7 +104,7 @@ def parse_maintenance_status(output: str) -> List[Dict[str, Any]]:
             elif enabled and not finished:
                 status_label = "DRAINING"
             else:
-                status_label = "ACTIVE"
+                status_label = "DISABLED"
 
             results.append({
                 "node_id": node_id,
