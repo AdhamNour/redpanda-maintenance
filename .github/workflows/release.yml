@@ -55,10 +55,6 @@ jobs:
             platform_name: macOS-arm64
             python_arch: arm64
 
-          - os: macos-13
-            platform_name: macOS-x64
-            python_arch: x64
-
     steps:
       # ──────────────────────────────────────────
       # 1. Source & Python Setup
@@ -288,8 +284,9 @@ jobs:
             | Platform | Installer | Archive |
             |----------|-----------|---------|
             | **Windows x64** | — | `PandaPilot-v${{ steps.release_meta.outputs.version }}-Windows-x64.zip` |
-            | **macOS Apple Silicon (M1/M2/M3)** | `.dmg` | `.zip` |
-            | **macOS Intel x64** | `.dmg` | `.zip` |
+            | **macOS (Apple Silicon — M1/M2/M3/M4)** | `.dmg` | `.zip` |
+
+            > 💡 **Intel Mac users**: The macOS build runs natively on Apple Silicon. Intel Macs can run it transparently via **Rosetta 2** — no configuration needed.
 
             ### ⚙️ Installation
 
