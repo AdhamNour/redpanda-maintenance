@@ -8,14 +8,21 @@ Rectangle {
     property var broker: ({})
     property bool isBusy: false
     property int pendingNodeId: -1
+    property bool hostCopied: false
 
     signal enableMaintenanceRequested(int nodeId)
     signal disableMaintenanceRequested(int nodeId)
 
-    implicitWidth: 320
-    implicitHeight: 240
+    Timer {
+        id: copyTimer
+        interval: 2000
+        onTriggered: root.hostCopied = false
+    }
+
+    implicitWidth: 340
+    implicitHeight: 260
     radius: 12
-    color: cardMouse.containsMouse ? "#22222C" : "#1B1B22"
+    color: cardMouse.containsMouse ? "#22222C" : (broker.is_main ? "#1C1C28" : "#1B1B22")
     border.color: (broker.ssh_status === "DISCONNECTED") ? "#EF4444" : (broker.is_main ? "#6366F1" : (cardMouse.containsMouse ? "#44445A" : "#2D2D3B"))
     border.width: (broker.ssh_status === "DISCONNECTED" || broker.is_main) ? 2 : 1
 
@@ -31,8 +38,8 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 18
-        spacing: 12
+        anchors.margins: 16
+        spacing: 10
 
         // Top Row: Node ID + Badges
         RowLayout {
@@ -64,11 +71,46 @@ Rectangle {
                     font.pixelSize: 15
                     font.bold: true
                 }
-                Text {
-                    text: (broker.host || "0.0.0.0") + ":" + (broker.port || "9092")
-                    color: "#A1A1AA"
-                    font.pixelSize: 12
-                    font.family: "Cascadia Code, Consolas, monospace"
+
+                RowLayout {
+                    spacing: 6
+                    Text {
+                        text: (broker.host || "0.0.0.0") + ":" + (broker.port || "9092")
+                        color: root.hostCopied ? "#34D399" : "#A1A1AA"
+                        font.pixelSize: 12
+                        font.family: "Cascadia Code, Consolas, monospace"
+                    }
+
+                    // Fixed-size hoverable inline copy IP button (no layout shift)
+                    Rectangle {
+                        implicitWidth: 22
+                        implicitHeight: 20
+                        radius: 4
+                        color: root.hostCopied ? "#064E3B" : (copyMouse.containsMouse ? "#2D2D3E" : "#20202A")
+                        border.color: root.hostCopied ? "#10B981" : (copyMouse.containsMouse ? "#45455E" : "transparent")
+
+                        MouseArea {
+                            id: copyMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (broker.host) {
+                                    appController.copyToClipboard(broker.host);
+                                    root.hostCopied = true;
+                                    copyTimer.restart();
+                                }
+                            }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: root.hostCopied ? "✓" : "📋"
+                            color: root.hostCopied ? "#34D399" : "#8E8EA0"
+                            font.pixelSize: root.hostCopied ? 11 : 10
+                            font.bold: root.hostCopied
+                        }
+                    }
                 }
             }
 

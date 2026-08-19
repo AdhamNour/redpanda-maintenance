@@ -1,12 +1,27 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 Item {
     id: root
 
     property int selectedProfileId: -1
     property bool isEditing: false
+    property bool showSshPassword: false
+    property bool showSaslPassword: false
+
+    FileDialog {
+        id: keyFileDialog
+        title: "Select SSH Private Key (.pem, .id_rsa, .key)"
+        nameFilters: ["SSH Keys (*.pem *.id_rsa *.key id_* *)", "All Files (*)"]
+        onAccepted: {
+            var raw = selectedFile.toString();
+            // Clean up file:/// URL prefix on Windows/macOS
+            var cleanPath = raw.replace(/^file:\/\/\//, "");
+            sshKeyInput.text = cleanPath;
+        }
+    }
 
     function loadProfileForm(prof) {
         if (!prof) {
@@ -21,6 +36,8 @@ Item {
             saslPassInput.text = "";
             saslMechCombo.currentIndex = 0;
             root.selectedProfileId = -1;
+            root.showSshPassword = false;
+            root.showSaslPassword = false;
             return;
         }
 
@@ -34,6 +51,8 @@ Item {
         authTypeCombo.currentIndex = (prof.ssh_auth_type === "key") ? 1 : 0;
         saslUserInput.text = prof.sasl_user || "";
         saslPassInput.text = prof.sasl_password || "";
+        root.showSshPassword = false;
+        root.showSaslPassword = false;
 
         if (prof.sasl_mechanism === "SCRAM-SHA-512") saslMechCombo.currentIndex = 1;
         else if (prof.sasl_mechanism === "PLAIN") saslMechCombo.currentIndex = 2;
@@ -53,7 +72,7 @@ Item {
 
         // Left Pane: Profiles List
         Rectangle {
-            Layout.preferredWidth: 300
+            Layout.preferredWidth: 320
             Layout.fillHeight: true
             radius: 12
             color: "#16161D"
@@ -111,7 +130,7 @@ Item {
 
                         delegate: Rectangle {
                             width: profileList.width
-                            implicitHeight: 56
+                            implicitHeight: 60
                             radius: 8
                             color: root.selectedProfileId === modelData.id ? "#272738" : (profileMouse.containsMouse ? "#20202C" : "#1A1A24")
                             border.color: root.selectedProfileId === modelData.id ? "#F04D23" : "#2E2E3E"
@@ -128,14 +147,15 @@ Item {
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.margins: 12
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 12
                                 spacing: 10
 
                                 Image {
-                                    Layout.preferredWidth: 32
-                                    Layout.preferredHeight: 32
-                                    sourceSize.width: 32
-                                    sourceSize.height: 32
+                                    Layout.preferredWidth: 30
+                                    Layout.preferredHeight: 30
+                                    sourceSize.width: 30
+                                    sourceSize.height: 30
                                     source: "../../resources/icon.png"
                                     mipmap: true
                                     smooth: true
@@ -143,17 +163,42 @@ Item {
                                 }
 
                                 ColumnLayout {
+                                    Layout.fillWidth: true
                                     spacing: 2
                                     Text {
                                         text: modelData.name
                                         color: "#FFFFFF"
                                         font.bold: true
                                         font.pixelSize: 13
+                                        elide: Text.ElideRight
                                     }
                                     Text {
                                         text: modelData.host + ":" + modelData.port
                                         color: "#8E8EA0"
                                         font.pixelSize: 11
+                                        font.family: "Cascadia Code, Consolas, monospace"
+                                    }
+                                }
+
+                                // Quick Connect Action
+                                Button {
+                                    implicitHeight: 26
+                                    implicitWidth: 32
+                                    visible: profileMouse.containsMouse || (appController.currentProfile && appController.currentProfile.id === modelData.id)
+                                    onClicked: {
+                                        appController.selectProfile(modelData.id);
+                                        appController.connectCurrentProfile();
+                                    }
+                                    contentItem: Text {
+                                        text: "⚡"
+                                        font.pixelSize: 12
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    background: Rectangle {
+                                        radius: 4
+                                        color: parent.hovered ? "#381313" : "#221616"
+                                        border.color: "#F04D23"
                                     }
                                 }
                             }
@@ -278,13 +323,33 @@ Item {
                         Layout.fillWidth: true
                         spacing: 4
                         Text { text: "SSH Password"; color: "#A1A1AA"; font.pixelSize: 12 }
-                        TextField {
-                            id: sshPassInput
+                        RowLayout {
                             Layout.fillWidth: true
-                            echoMode: TextInput.Password
-                            placeholderText: "SSH Password"
-                            color: "#FFFFFF"
-                            background: Rectangle { radius: 6; color: "#111116"; border.color: "#343444" }
+                            spacing: 8
+                            TextField {
+                                id: sshPassInput
+                                Layout.fillWidth: true
+                                echoMode: root.showSshPassword ? TextInput.Normal : TextInput.Password
+                                placeholderText: "SSH Password"
+                                color: "#FFFFFF"
+                                background: Rectangle { radius: 6; color: "#111116"; border.color: "#343444" }
+                            }
+                            Button {
+                                implicitHeight: 38
+                                implicitWidth: 42
+                                onClicked: root.showSshPassword = !root.showSshPassword
+                                contentItem: Text {
+                                    text: root.showSshPassword ? "👁️" : "🔒"
+                                    font.pixelSize: 14
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                background: Rectangle {
+                                    radius: 6
+                                    color: parent.hovered ? "#282834" : "#1A1A22"
+                                    border.color: "#343444"
+                                }
+                            }
                         }
                     }
 
@@ -293,12 +358,35 @@ Item {
                         Layout.fillWidth: true
                         spacing: 4
                         Text { text: "SSH Private Key Absolute Path"; color: "#A1A1AA"; font.pixelSize: 12 }
-                        TextField {
-                            id: sshKeyInput
+                        RowLayout {
                             Layout.fillWidth: true
-                            placeholderText: "C:/Users/name/.ssh/id_rsa"
-                            color: "#FFFFFF"
-                            background: Rectangle { radius: 6; color: "#111116"; border.color: "#343444" }
+                            spacing: 8
+                            TextField {
+                                id: sshKeyInput
+                                Layout.fillWidth: true
+                                placeholderText: "C:/Users/name/.ssh/id_rsa"
+                                color: "#FFFFFF"
+                                background: Rectangle { radius: 6; color: "#111116"; border.color: "#343444" }
+                            }
+                            Button {
+                                implicitHeight: 38
+                                implicitWidth: 100
+                                text: "📁 Browse..."
+                                onClicked: keyFileDialog.open()
+                                contentItem: Text {
+                                    text: "📁 Browse..."
+                                    color: "#FFFFFF"
+                                    font.bold: true
+                                    font.pixelSize: 11
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                background: Rectangle {
+                                    radius: 6
+                                    color: parent.hovered ? "#2D2D3E" : "#222230"
+                                    border.color: "#45455E"
+                                }
+                            }
                         }
                     }
 
@@ -326,13 +414,33 @@ Item {
                             Layout.fillWidth: true
                             spacing: 4
                             Text { text: "SASL Password"; color: "#A1A1AA"; font.pixelSize: 12 }
-                            TextField {
-                                id: saslPassInput
+                            RowLayout {
                                 Layout.fillWidth: true
-                                echoMode: TextInput.Password
-                                placeholderText: "SASL Password"
-                                color: "#FFFFFF"
-                                background: Rectangle { radius: 6; color: "#111116"; border.color: "#343444" }
+                                spacing: 8
+                                TextField {
+                                    id: saslPassInput
+                                    Layout.fillWidth: true
+                                    echoMode: root.showSaslPassword ? TextInput.Normal : TextInput.Password
+                                    placeholderText: "SASL Password"
+                                    color: "#FFFFFF"
+                                    background: Rectangle { radius: 6; color: "#111116"; border.color: "#343444" }
+                                }
+                                Button {
+                                    implicitHeight: 38
+                                    implicitWidth: 42
+                                    onClicked: root.showSaslPassword = !root.showSaslPassword
+                                    contentItem: Text {
+                                        text: root.showSaslPassword ? "👁️" : "🔒"
+                                        font.pixelSize: 14
+                                        horizontalAlignment: Text.AlignHCenter
+                                        verticalAlignment: Text.AlignVCenter
+                                    }
+                                    background: Rectangle {
+                                        radius: 6
+                                        color: parent.hovered ? "#282834" : "#1A1A22"
+                                        border.color: "#343444"
+                                    }
+                                }
                             }
                         }
                     }

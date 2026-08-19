@@ -113,4 +113,17 @@ Dialog {
             }
         }
     }
+
+    Shortcut {
+        sequence: "Return"
+        onActivated: if (root.visible) { root.confirmed(); root.close(); }
+    }
+    Shortcut {
+        sequence: "Enter"
+        onActivated: if (root.visible) { root.confirmed(); root.close(); }
+    }
+    Shortcut {
+        sequence: "Escape"
+        onActivated: if (root.visible) { root.cancelled(); root.close(); }
+    }
 }

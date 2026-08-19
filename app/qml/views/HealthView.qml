@@ -6,6 +6,14 @@ import "../components"
 Item {
     id: root
 
+    property bool reportCopied: false
+
+    Timer {
+        id: copyTimer
+        interval: 2000
+        onTriggered: root.reportCopied = false
+    }
+
     ScrollView {
         anchors.fill: parent
         clip: true
@@ -36,17 +44,19 @@ Item {
                 Item { Layout.fillWidth: true }
                 Button {
                     enabled: appController.isConnected && !appController.isBusy
-                    text: "Re-check Health"
                     implicitHeight: 36
                     implicitWidth: 130
                     onClicked: appController.refreshAllClusterData()
-                    contentItem: Text {
-                        text: "Re-check Health"
-                        color: "#FFFFFF"
-                        font.bold: true
-                        font.pixelSize: 12
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
+                    contentItem: RowLayout {
+                        spacing: 6
+                        anchors.centerIn: parent
+                        Text { text: "🔄"; font.pixelSize: 11 }
+                        Text {
+                            text: "Re-check Health"
+                            color: "#FFFFFF"
+                            font.bold: true
+                            font.pixelSize: 12
+                        }
                     }
                     background: Rectangle {
                         radius: 8
@@ -172,7 +182,7 @@ Item {
                 Layout.fillWidth: true
                 implicitHeight: 340
                 radius: 12
-                color: "#131318"
+                color: "#111116"
                 border.color: "#282834"
 
                 ColumnLayout {
@@ -182,18 +192,57 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         implicitHeight: 44
-                        color: "#181822"
+                        color: "#181824"
                         radius: 12
 
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 16
                             anchors.rightMargin: 16
+                            spacing: 10
+
+                            // Terminal dots
+                            RowLayout {
+                                spacing: 6
+                                Rectangle { width: 10; height: 10; radius: 5; color: "#EF4444" }
+                                Rectangle { width: 10; height: 10; radius: 5; color: "#F59E0B" }
+                                Rectangle { width: 10; height: 10; radius: 5; color: "#10B981" }
+                            }
+
                             Text {
-                                text: "Diagnostics Output (rpk cluster health)"
-                                color: "#FFFFFF"
+                                text: "rpk cluster health"
+                                color: "#A1A1AA"
+                                font.family: "Cascadia Code, Consolas, monospace"
                                 font.bold: true
-                                font.pixelSize: 13
+                                font.pixelSize: 12
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            // Copy Diagnostics Button
+                            Button {
+                                implicitHeight: 28
+                                implicitWidth: root.reportCopied ? 85 : 130
+                                onClicked: {
+                                    if (appController.healthInfo.raw_output) {
+                                        appController.copyToClipboard(appController.healthInfo.raw_output);
+                                        root.reportCopied = true;
+                                        copyTimer.restart();
+                                    }
+                                }
+                                contentItem: Text {
+                                    text: root.reportCopied ? "✓ Copied!" : "📋 Copy Report"
+                                    color: root.reportCopied ? "#34D399" : "#FFFFFF"
+                                    font.bold: true
+                                    font.pixelSize: 11
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                background: Rectangle {
+                                    radius: 6
+                                    color: parent.hovered ? "#2D2D3E" : "#222230"
+                                    border.color: root.reportCopied ? "#10B981" : "#45455E"
+                                }
                             }
                         }
                     }

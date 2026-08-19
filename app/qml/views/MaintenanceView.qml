@@ -194,20 +194,108 @@ Item {
                     anchors.margins: 20
                     spacing: 16
 
+                    // Wizard Header with Interactive 3-Stage Progress Stepper
                     RowLayout {
                         Layout.fillWidth: true
+                        spacing: 12
+
                         Text {
                             text: "🛠️ Guided Rolling Maintenance Assistant"
                             color: "#FFFFFF"
                             font.pixelSize: 16
                             font.bold: true
                         }
+
                         Item { Layout.fillWidth: true }
-                        Text {
-                            text: "Step " + root.wizardStep + " of 3"
-                            color: "#F04D23"
-                            font.bold: true
-                            font.pixelSize: 12
+
+                        // 3-Stage Stepper Bar
+                        RowLayout {
+                            spacing: 6
+
+                            // Step 1 Chip
+                            Rectangle {
+                                implicitWidth: step1Text.implicitWidth + 24
+                                implicitHeight: 28
+                                radius: 14
+                                color: root.wizardStep >= 1 ? (root.wizardStep > 1 ? "#064E3B" : "#3D1A14") : "#1A1A24"
+                                border.color: root.wizardStep === 1 ? "#F04D23" : (root.wizardStep > 1 ? "#10B981" : "#2E2E3E")
+
+                                RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    Text {
+                                        text: root.wizardStep > 1 ? "✓" : "1"
+                                        color: root.wizardStep > 1 ? "#34D399" : (root.wizardStep === 1 ? "#F04D23" : "#71717A")
+                                        font.bold: true
+                                        font.pixelSize: 11
+                                    }
+                                    Text {
+                                        id: step1Text
+                                        text: "Pre-Flight"
+                                        color: root.wizardStep === 1 ? "#FFFFFF" : "#A1A1AA"
+                                        font.bold: root.wizardStep === 1
+                                        font.pixelSize: 11
+                                    }
+                                }
+                            }
+
+                            Text { text: "➔"; color: "#4B5563"; font.pixelSize: 11 }
+
+                            // Step 2 Chip
+                            Rectangle {
+                                implicitWidth: step2Text.implicitWidth + 24
+                                implicitHeight: 28
+                                radius: 14
+                                color: root.wizardStep >= 2 ? (root.wizardStep > 2 ? "#064E3B" : "#3D1A14") : "#1A1A24"
+                                border.color: root.wizardStep === 2 ? "#F04D23" : (root.wizardStep > 2 ? "#10B981" : "#2E2E3E")
+
+                                RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    Text {
+                                        text: root.wizardStep > 2 ? "✓" : "2"
+                                        color: root.wizardStep > 2 ? "#34D399" : (root.wizardStep === 2 ? "#F04D23" : "#71717A")
+                                        font.bold: true
+                                        font.pixelSize: 11
+                                    }
+                                    Text {
+                                        id: step2Text
+                                        text: "Drain Node"
+                                        color: root.wizardStep === 2 ? "#FFFFFF" : "#A1A1AA"
+                                        font.bold: root.wizardStep === 2
+                                        font.pixelSize: 11
+                                    }
+                                }
+                            }
+
+                            Text { text: "➔"; color: "#4B5563"; font.pixelSize: 11 }
+
+                            // Step 3 Chip
+                            Rectangle {
+                                implicitWidth: step3Text.implicitWidth + 24
+                                implicitHeight: 28
+                                radius: 14
+                                color: root.wizardStep === 3 ? "#064E3B" : "#1A1A24"
+                                border.color: root.wizardStep === 3 ? "#10B981" : "#2E2E3E"
+
+                                RowLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 4
+                                    Text {
+                                        text: "3"
+                                        color: root.wizardStep === 3 ? "#34D399" : "#71717A"
+                                        font.bold: true
+                                        font.pixelSize: 11
+                                    }
+                                    Text {
+                                        id: step3Text
+                                        text: "Rejoin"
+                                        color: root.wizardStep === 3 ? "#FFFFFF" : "#A1A1AA"
+                                        font.bold: root.wizardStep === 3
+                                        font.pixelSize: 11
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -286,6 +374,29 @@ Item {
                             }
                         }
 
+                        // Controller Advisory Alert
+                        Rectangle {
+                            visible: root.selectedNodeId >= 0 && appController.controllerBroker.id === root.selectedNodeId
+                            Layout.fillWidth: true
+                            implicitHeight: 38
+                            radius: 6
+                            color: "#1E1F38"
+                            border.color: "#6366F1"
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 12
+                                spacing: 8
+                                Text { text: "★"; color: "#818CF8"; font.pixelSize: 13 }
+                                Text {
+                                    text: "Node " + root.selectedNodeId + " is the active Controller leader. Leadership will transfer before partitions drain."
+                                    color: "#C7D2FE"
+                                    font.pixelSize: 12
+                                }
+                            }
+                        }
+
                         RowLayout {
                             spacing: 12
                             Button {
@@ -297,7 +408,7 @@ Item {
                             Button {
                                 text: "Drain & Enter Maintenance"
                                 implicitHeight: 36
-                                implicitWidth: 200
+                                implicitWidth: 220
                                 enabled: root.selectedNodeId >= 0 && !appController.isBusy
                                 onClicked: {
                                     root.requestEnableMaintenance(root.selectedNodeId);

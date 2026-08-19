@@ -113,7 +113,7 @@ ApplicationWindow {
 
                     ComboBox {
                         id: profilePicker
-                        implicitWidth: 200
+                        implicitWidth: 220
                         implicitHeight: 34
                         model: appController.profiles
                         textRole: "name"
@@ -126,6 +126,66 @@ ApplicationWindow {
                         onActivated: {
                             var prof = appController.profiles[index];
                             if (prof) appController.selectProfile(prof.id);
+                        }
+
+                        contentItem: Text {
+                            leftPadding: 12
+                            rightPadding: profilePicker.indicator.width + 12
+                            text: profilePicker.displayText
+                            font.bold: true
+                            font.pixelSize: 12
+                            color: "#FFFFFF"
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+
+                        background: Rectangle {
+                            radius: 6
+                            color: profilePicker.hovered ? "#222230" : "#181822"
+                            border.color: profilePicker.visualFocus ? "#F04D23" : "#343446"
+                            border.width: 1
+                        }
+
+                        popup: Popup {
+                            y: profilePicker.height + 4
+                            width: profilePicker.width
+                            implicitHeight: contentItem.implicitHeight + 12
+                            padding: 6
+
+                            contentItem: ListView {
+                                clip: true
+                                implicitHeight: contentHeight
+                                model: profilePicker.popup.visible ? profilePicker.delegateModel : null
+                                currentIndex: profilePicker.highlightedIndex
+                                ScrollIndicator.vertical: ScrollIndicator { }
+                            }
+
+                            background: Rectangle {
+                                radius: 8
+                                color: "#161622"
+                                border.color: "#343448"
+                                border.width: 1
+                            }
+                        }
+
+                        delegate: ItemDelegate {
+                            width: profilePicker.width - 12
+                            implicitHeight: 32
+                            highlighted: profilePicker.highlightedIndex === index
+
+                            contentItem: Text {
+                                text: modelData.name
+                                color: highlighted ? "#F04D23" : "#FFFFFF"
+                                font.bold: highlighted
+                                font.pixelSize: 12
+                                verticalAlignment: Text.AlignVCenter
+                                elide: Text.ElideRight
+                            }
+
+                            background: Rectangle {
+                                radius: 4
+                                color: highlighted ? "#262638" : "transparent"
+                            }
                         }
                     }
                 }
@@ -348,10 +408,49 @@ ApplicationWindow {
         // BOTTOM LOG DRAWER
         // ==========================================
         LogDrawer {
+            id: logDrawer
             Layout.fillWidth: true
             logModel: window.logItems
             onClearRequested: window.logItems = []
         }
+    }
+
+    // Global Keyboard Shortcuts
+    Shortcut {
+        sequence: "Ctrl+R"
+        onActivated: {
+            if (appController.isConnected && !appController.isBusy) {
+                appController.refreshAllClusterData();
+            }
+        }
+    }
+    Shortcut {
+        sequence: "F5"
+        onActivated: {
+            if (appController.isConnected && !appController.isBusy) {
+                appController.refreshAllClusterData();
+            }
+        }
+    }
+    Shortcut {
+        sequence: "Ctrl+L"
+        onActivated: logDrawer.isExpanded = !logDrawer.isExpanded
+    }
+    Shortcut {
+        sequence: "Ctrl+1"
+        onActivated: viewStack.currentIndex = 0
+    }
+    Shortcut {
+        sequence: "Ctrl+2"
+        onActivated: viewStack.currentIndex = 1
+    }
+    Shortcut {
+        sequence: "Ctrl+3"
+        onActivated: viewStack.currentIndex = 2
+    }
+    Shortcut {
+        sequence: "Ctrl+4"
+        onActivated: viewStack.currentIndex = 3
     }
 
     // Floating Maintenance Success Toast Banner
