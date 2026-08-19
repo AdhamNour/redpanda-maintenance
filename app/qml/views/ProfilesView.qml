@@ -5,7 +5,6 @@ import QtQuick.Layouts
 Item {
     id: root
 
-    property var appController
     property int selectedProfileId: -1
     property bool isEditing: false
 

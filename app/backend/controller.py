@@ -3,7 +3,9 @@ import threading
 from typing import Any, Dict, List, Optional
 from PySide6.QtCore import QObject, Property, Signal, Slot
 
+from app.backend.broker_monitor import BrokerHealthMonitor
 from app.backend.database import DatabaseManager
+from app.backend.notifier import NotificationManager
 from app.backend.parser import parse_brokers, parse_cluster_health, parse_maintenance_status
 from app.backend.ssh_client import SSHClientManager
 
@@ -47,8 +49,54 @@ class AppController(QObject):
         self._is_busy: bool = False
         self._busy_message: str = ""
 
+        # Notification and Multi-Broker Health Monitor
+        self.notifier = NotificationManager(self)
+        self.monitor = BrokerHealthMonitor(check_interval=8.0, parent=self)
+        self.monitor.connectionLost.connect(self._on_broker_connection_lost)
+        self.monitor.connectionRestored.connect(self._on_broker_connection_restored)
+        self.monitor.brokerStatusChanged.connect(self._on_broker_status_changed)
+
         # Load initial profiles from database
         self.refresh_profiles_internal()
+
+    def _on_broker_connection_lost(self, node_id: int, host: str, reason: str):
+        title = f"⚠️ Redpanda Alert: Broker {node_id} Disconnected"
+        msg = f"SSH health check failed for {host} (Node {node_id}): {reason}"
+        self.notifier.notify(title, msg, level="critical")
+        self._log("ERROR", f"SSH connection lost for Broker {node_id} ({host}): {reason}")
+        if self._current_profile:
+            self.db.log_activity(
+                self._current_profile.get("id"),
+                f"SSH Heartbeat to {host}",
+                "SSH_HEALTH_CHECK",
+                "DISCONNECTED",
+                reason
+            )
+
+    def _on_broker_connection_restored(self, node_id: int, host: str):
+        title = f"✅ Redpanda Alert: Broker {node_id} Reconnected"
+        msg = f"SSH health check restored for {host} (Node {node_id})."
+        self.notifier.notify(title, msg, level="success")
+        self._log("SUCCESS", f"SSH connection restored for Broker {node_id} ({host})")
+        if self._current_profile:
+            self.db.log_activity(
+                self._current_profile.get("id"),
+                f"SSH Heartbeat to {host}",
+                "SSH_HEALTH_CHECK",
+                "CONNECTED",
+                "Connection restored"
+            )
+
+    def _on_broker_status_changed(self, node_id: int, status: str, error_msg: str):
+        changed = False
+        for b in self._brokers:
+            if b.get("id") == node_id:
+                if b.get("ssh_status") != status:
+                    b["ssh_status"] = status
+                    b["ssh_error"] = error_msg
+                    changed = True
+        if changed:
+            self.clusterDataChanged.emit()
 
     # -------------------------------------------------------------------------
     # Properties for QML
@@ -194,6 +242,7 @@ class AppController(QObject):
 
     @Slot()
     def disconnectSSH(self):
+        self.monitor.stop_monitoring()
         self.ssh.disconnect()
         self._is_connected = False
         self._connection_status = "Disconnected"
@@ -218,10 +267,14 @@ class AppController(QObject):
 
             if out:
                 new_brokers, new_main = parse_brokers(out)
+                for b in new_brokers:
+                    b["ssh_status"] = "CONNECTED"
                 self._brokers = new_brokers
                 self._controller_broker = new_main or {}
                 self.clusterDataChanged.emit()
                 self._log("SUCCESS", f"Fetched {len(new_brokers)} broker(s).")
+                # Start multi-broker SSH health monitoring
+                self.monitor.start_monitoring(self._current_profile, self._brokers)
             elif err:
                 self._log("ERROR", f"rpk cluster info failed: {err}")
 

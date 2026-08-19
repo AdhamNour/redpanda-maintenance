@@ -1,16 +1,17 @@
 import os
 import sys
 from pathlib import Path
-from PySide6.QtGui import QGuiApplication, QIcon
-from PySide6.QtQml import QQmlApplicationEngine
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
+from PySide6.QtQml import QQmlApplicationEngine
+from PySide6.QtWidgets import QApplication
 
 from app.backend.controller import AppController
 from app.backend.database import DatabaseManager
 
 
 def main():
-    app = QGuiApplication(sys.argv)
+    app = QApplication(sys.argv)
     app.setApplicationName("PandaPilot")
     app.setOrganizationName("PandaPilot")
     app.setApplicationDisplayName("PandaPilot - Redpanda Maintenance Cockpit")

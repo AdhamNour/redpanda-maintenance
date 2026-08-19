@@ -1,0 +1,128 @@
+# Implementation Plan: Multi-Broker SSH Health Monitoring & Desktop Notifications
+
+Implement background SSH heartbeat health monitoring across all discovered cluster brokers and native Windows/macOS desktop notifications when any broker connection drops or encounters issues.
+
+---
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Application Class Update (`QApplication`)**:
+> To support cross-platform native desktop notifications and system tray integration (`QSystemTrayIcon`), `app/main.py` will use `QApplication` from `PySide6.QtWidgets` instead of `QGuiApplication`. This enables native Windows 10/11 toast notifications and macOS Notification Center alerts without third-party dependencies.
+
+> [!NOTE]
+> **Multi-Broker SSH Auth Strategy**:
+> Discovered brokers (from `rpk cluster info`) will be monitored using the active cluster profile's SSH credentials (SSH user + password/key). If a cluster uses distinct credentials per host, we will allow overriding per-broker host IPs in the profile.
+
+---
+
+## 📐 Architecture & Monitoring Flow
+
+```mermaid
+graph TD
+    subgraph UI ["QML Desktop UI"]
+        A["BrokerCard (SSH Live Indicator)"]
+        B["Log Drawer (Alert Stream)"]
+        C["Main Window (Tray Icon)"]
+    end
+
+    subgraph MonitorEngine ["Multi-Broker Heartbeat Monitor"]
+        D["BrokerHealthMonitor (Background Thread)"]
+        E["Broker 0 SSH Probe"]
+        F["Broker 1 SSH Probe"]
+        G["Broker N SSH Probe"]
+    end
+
+    subgraph NotificationSystem ["OS Notification Engine"]
+        H["Notifier (QSystemTrayIcon)"]
+        I["Windows 10/11 Toast / macOS Alerts"]
+    end
+
+    subgraph BackendCore ["App Controller & Storage"]
+        J["AppController (Qt Signals/Slots)"]
+        K[("SQLite Activity Log")]
+    end
+
+    J -->|Start Monitoring with Broker List| D
+    D --> E
+    D --> F
+    D --> G
+
+    E -->|Connection Dropped / Failed| D
+    F -->|Connection Dropped / Failed| D
+    G -->|Connection Dropped / Failed| D
+
+    D -->|Emit brokerStatusChanged| J
+    J -->|Trigger Native Alert| H
+    H -->|Show Toast Notification| I
+    J -->|Update UI Badges| A
+    J -->|Log Alert Stream| B
+    J -->|Persist Event| K
+```
+
+---
+
+## Key Components to Implement
+
+### 1. `NotificationManager` (`app/backend/notifier.py`)
+* Wraps `QSystemTrayIcon` from `PySide6.QtWidgets`.
+* Methods:
+  * `notify_error(title, message)`: Triggers native OS warning/critical notification.
+  * `notify_success(title, message)`: Triggers recovery/success notification.
+  * `notify_info(title, message)`: General notifications.
+* Works seamlessly on Windows 10/11 (Action Center / Toasts) and macOS (Notification Center).
+
+### 2. `BrokerHealthMonitor` (`app/backend/broker_monitor.py`)
+* Runs in a dedicated background worker thread with configurable polling frequency (default: every 5-10 seconds).
+* Maintains lightweight SSH connections/heartbeat probes to each broker host (`host:port`).
+* Detects transition states:
+  * `CONNECTED` (🟢 Active SSH & responsive).
+  * `SSH_DROPPED` (🔴 Connection timeout / socket closed / auth failure).
+  * `RECONNECTED` (🟢 Automatic recovery detected).
+* Emits Qt signals:
+  * `brokerStatusChanged(int nodeId, str host, str status, str errorMsg)`
+  * `connectionAlert(str title, str message, str level)`
+
+### 3. Backend Integration (`app/backend/controller.py` & `app/main.py`)
+* `app/main.py`: Updated to use `QApplication` and initialize the system tray icon.
+* `app/backend/controller.py`:
+  * Spawns/updates `BrokerHealthMonitor` whenever `brokers` list is refreshed.
+  * Listens for `connectionAlert` and forwards to `NotificationManager`.
+  * Logs disconnection events into SQLite `activity_logs`.
+  * Enriches broker model with `ssh_status` (e.g. `"CONNECTED"`, `"UNREACHABLE"`).
+
+### 4. QML UI Enhancements
+* **[BrokerCard.qml](file:///c:/Users/anhassan/redpanda-maintenance/app/qml/components/BrokerCard.qml)**:
+  * Add live SSH pulse indicator: `SSH: 🟢 Connected` or `SSH: 🔴 Disconnected (Connection Lost)`.
+* **[DashboardView.qml](file:///c:/Users/anhassan/redpanda-maintenance/app/qml/views/DashboardView.qml)**:
+  * Add heartbeats counter and active monitor toggle switch.
+
+---
+
+## Proposed Changes & File List
+
+| File | Change Type | Description |
+| :--- | :--- | :--- |
+| [app/backend/notifier.py](file:///c:/Users/anhassan/redpanda-maintenance/app/backend/notifier.py) | **[NEW]** | OS Desktop Notification Manager using `QSystemTrayIcon` |
+| [app/backend/broker_monitor.py](file:///c:/Users/anhassan/redpanda-maintenance/app/backend/broker_monitor.py) | **[NEW]** | Multi-broker background SSH heartbeat monitor |
+| [app/backend/controller.py](file:///c:/Users/anhassan/redpanda-maintenance/app/backend/controller.py) | **[MODIFY]** | Connect broker monitor, notification triggers, and SQLite logging |
+| [app/main.py](file:///c:/Users/anhassan/redpanda-maintenance/app/main.py) | **[MODIFY]** | Switch to `QApplication` and attach system tray notifier |
+| [app/qml/components/BrokerCard.qml](file:///c:/Users/anhassan/redpanda-maintenance/app/qml/components/BrokerCard.qml) | **[MODIFY]** | Display live SSH connection status pill on each broker card |
+| [tests/test_monitor.py](file:///c:/Users/anhassan/redpanda-maintenance/tests/test_monitor.py) | **[NEW]** | Unit tests for broker health monitor state transitions |
+
+---
+
+## Verification Plan
+
+### Automated / Unit Tests
+* Test `BrokerHealthMonitor` state tracking when an endpoint becomes reachable or unreachable.
+* Verify `NotificationManager` signals and fallback logging.
+
+### Manual Verification
+1. Launch the app with `python -m app.main`.
+2. Connect to a cluster profile.
+3. Verify that the heartbeat monitor tracks each broker.
+4. Simulate a connection drop (e.g. invalid port/host or blocked network) and verify:
+   * A native Windows/macOS toast notification pops up: `⚠️ PandaPilot Alert: Broker Disconnected`.
+   * UI status badge updates to `SSH: 🔴 Lost`.
+   * The event appears in the execution console drawer and is recorded in SQLite `activity_logs`.

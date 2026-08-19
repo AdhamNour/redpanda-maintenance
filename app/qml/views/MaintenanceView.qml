@@ -6,7 +6,6 @@ import "../components"
 Item {
     id: root
 
-    property var appController
     property int wizardStep: 1
     property int selectedNodeId: -1
 

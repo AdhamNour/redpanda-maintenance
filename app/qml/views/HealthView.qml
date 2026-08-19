@@ -6,8 +6,6 @@ import "../components"
 Item {
     id: root
 
-    property var appController
-
     ScrollView {
         anchors.fill: parent
         clip: true

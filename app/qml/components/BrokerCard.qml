@@ -12,11 +12,11 @@ Rectangle {
     signal disableMaintenanceRequested(int nodeId)
 
     implicitWidth: 320
-    implicitHeight: 210
+    implicitHeight: 240
     radius: 12
     color: cardMouse.containsMouse ? "#22222C" : "#1B1B22"
-    border.color: broker.is_main ? "#6366F1" : (cardMouse.containsMouse ? "#44445A" : "#2D2D3B")
-    border.width: broker.is_main ? 2 : 1
+    border.color: (broker.ssh_status === "DISCONNECTED") ? "#EF4444" : (broker.is_main ? "#6366F1" : (cardMouse.containsMouse ? "#44445A" : "#2D2D3B"))
+    border.width: (broker.ssh_status === "DISCONNECTED" || broker.is_main) ? 2 : 1
 
     Behavior on color { ColorAnimation { duration: 150 } }
     Behavior on border.color { ColorAnimation { duration: 150 } }
@@ -129,6 +129,37 @@ Rectangle {
                         return "healthy";
                     }
                 }
+            }
+        }
+
+        // Middle Row 2: SSH Health Heartbeat State
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
+
+            ColumnLayout {
+                spacing: 2
+                Text {
+                    text: "SSH HEALTH"
+                    color: "#71717A"
+                    font.pixelSize: 10
+                    font.bold: true
+                }
+                StatusBadge {
+                    label: broker.ssh_status === "DISCONNECTED" ? "SSH LOST" : "SSH ACTIVE"
+                    type: broker.ssh_status === "DISCONNECTED" ? "critical" : "healthy"
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+
+            Text {
+                visible: broker.ssh_status === "DISCONNECTED" && broker.ssh_error
+                text: "⚠️ Offline"
+                color: "#F87171"
+                font.pixelSize: 11
+                font.bold: true
+                Layout.alignment: Qt.AlignVCenter
             }
         }
 

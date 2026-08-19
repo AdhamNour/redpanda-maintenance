@@ -6,7 +6,6 @@ import "../components"
 Item {
     id: root
 
-    property var appController
     signal requestEnableMaintenance(int nodeId)
     signal requestDisableMaintenance(int nodeId)
 

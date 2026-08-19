@@ -14,9 +14,6 @@ ApplicationWindow {
     title: "PandaPilot - Redpanda Cluster Maintenance Cockpit"
     color: "#0E0E12"
 
-    // App controller instance supplied from Python main.py
-    property var controller: appController
-
     // Local log list for the LogDrawer
     property var logItems: []
 
@@ -282,7 +279,6 @@ ApplicationWindow {
                 currentIndex: 0
 
                 DashboardView {
-                    appController: window.controller
                     onRequestEnableMaintenance: function(nodeId) {
                         window.pendingMaintenanceNodeId = nodeId;
                         window.pendingIsEnable = true;
@@ -303,12 +299,9 @@ ApplicationWindow {
                     }
                 }
 
-                HealthView {
-                    appController: window.controller
-                }
+                HealthView {}
 
                 MaintenanceView {
-                    appController: window.controller
                     onRequestEnableMaintenance: function(nodeId) {
                         window.pendingMaintenanceNodeId = nodeId;
                         window.pendingIsEnable = true;
@@ -329,9 +322,7 @@ ApplicationWindow {
                     }
                 }
 
-                ProfilesView {
-                    appController: window.controller
-                }
+                ProfilesView {}
             }
         }
 
