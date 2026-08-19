@@ -1,0 +1,191 @@
+name: Build and Release PandaPilot
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag Name (e.g. v1.0.0)'
+        required: false
+        default: ''
+      draft:
+        description: 'Publish as draft release'
+        type: boolean
+        default: false
+      prerelease:
+        description: 'Publish as pre-release'
+        type: boolean
+        default: false
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform_name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform_name: Windows-x64
+            artifact_pattern: dist/PandaPilot-Windows-x64.zip
+          - os: macos-14
+            platform_name: macOS-AppleSilicon-arm64
+            artifact_pattern: dist/PandaPilot-macOS-arm64.*
+          - os: macos-13
+            platform_name: macOS-Intel-x64
+            artifact_pattern: dist/PandaPilot-macOS-x64.*
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller pillow
+
+      - name: Generate App Icons
+        run: |
+          python -c "
+          from pathlib import Path
+          from PIL import Image
+          from app.backend.notifier import get_or_generate_app_icon
+          
+          # 1. Ensure PNG icon is generated
+          get_or_generate_app_icon()
+          
+          icon_png = Path('app/resources/icon.png')
+          if icon_png.exists():
+              img = Image.open(icon_png)
+              # Generate Windows .ico
+              img.save('app/resources/icon.ico', format='ICO', sizes=[(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
+              # Generate macOS .icns
+              img.save('app/resources/icon.icns', format='ICNS')
+              print('Successfully generated icon.ico and icon.icns')
+          "
+
+      # ==========================================
+      # WINDOWS BUILD STEP
+      # ==========================================
+      - name: Build Windows Application (PyInstaller)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          pyinstaller `
+            --noconsole `
+            --onedir `
+            --name PandaPilot `
+            --icon "app/resources/icon.ico" `
+            --add-data "app/qml;app/qml" `
+            --add-data "app/resources;app/resources" `
+            --collect-all PySide6 `
+            --hidden-import paramiko `
+            --hidden-import bcrypt `
+            --hidden-import cryptography `
+            --clean `
+            -y `
+            app/main.py
+
+          # Create a clean release folder with README and the packaged executable directory
+          Compress-Archive -Path "dist/PandaPilot/*" -DestinationPath "dist/PandaPilot-Windows-x64.zip" -Force
+          Write-Host "Created dist/PandaPilot-Windows-x64.zip"
+
+      # ==========================================
+      # MACOS BUILD STEP (Apple Silicon & Intel)
+      # ==========================================
+      - name: Build macOS Application (PyInstaller)
+        if: runner.os == 'macOS'
+        run: |
+          pyinstaller \
+            --noconsole \
+            --windowed \
+            --name PandaPilot \
+            --icon "app/resources/icon.icns" \
+            --add-data "app/qml:app/qml" \
+            --add-data "app/resources:app/resources" \
+            --collect-all PySide6 \
+            --hidden-import paramiko \
+            --hidden-import bcrypt \
+            --hidden-import cryptography \
+            --osx-bundle-identifier "com.pandapilot.desktop" \
+            --clean \
+            -y \
+            app/main.py
+
+          ARCH_LABEL="${{ matrix.platform_name == 'macOS-AppleSilicon-arm64' && 'arm64' || 'x64' }}"
+
+          # 1. Create compressed ZIP preserving macOS bundle symlinks & permissions
+          ditto -c -k --sequesterRsrc --keepParent "dist/PandaPilot.app" "dist/PandaPilot-macOS-${ARCH_LABEL}.zip"
+
+          # 2. Create standard mountable DMG disk image
+          hdiutil create -volname "PandaPilot" -srcfolder "dist/PandaPilot.app" -ov -format UDZO "dist/PandaPilot-macOS-${ARCH_LABEL}.dmg"
+
+          ls -lh dist/
+
+      # ==========================================
+      # UPLOAD BUILD ARTIFACTS TO ACTION RUN
+      # ==========================================
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PandaPilot-${{ matrix.platform_name }}
+          path: ${{ matrix.artifact_pattern }}
+          if-no-files-found: error
+
+  # ==========================================
+  # RELEASE JOB (Publish to GitHub Releases)
+  # ==========================================
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download All Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: List Release Files
+        run: |
+          ls -lah release-artifacts/
+
+      - name: Determine Release Tag
+        id: release_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            echo "tag=${{ github.event.inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: "PandaPilot ${{ steps.release_tag.outputs.tag }}"
+          files: release-artifacts/*
+          draft: ${{ github.event.inputs.draft || false }}
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
