@@ -47,10 +47,13 @@ def main():
         print(f"Error: Failed to load QML interface from {qml_path}", file=sys.stderr)
         sys.exit(-1)
 
-    # Set icon on the QQuickWindow root objects
-    for root_obj in engine.rootObjects():
-        if hasattr(root_obj, "setIcon"):
-            root_obj.setIcon(app_icon)
+    # Set icon and register window with controller for tray actions
+    root_objects = engine.rootObjects()
+    if root_objects:
+        controller.set_root_window(root_objects[0])
+        for root_obj in root_objects:
+            if hasattr(root_obj, "setIcon"):
+                root_obj.setIcon(app_icon)
 
     sys.exit(app.exec())
 

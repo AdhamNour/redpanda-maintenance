@@ -52,14 +52,27 @@ class AppController(QObject):
         self._busy_message: str = ""
 
         # Notification and Multi-Broker Health Monitor
-        self.notifier = NotificationManager(self)
+        self.notifier = NotificationManager(parent=self, controller=self)
         self.monitor = BrokerHealthMonitor(check_interval=8.0, parent=self)
         self.monitor.connectionLost.connect(self._on_broker_connection_lost)
         self.monitor.connectionRestored.connect(self._on_broker_connection_restored)
         self.monitor.brokerStatusChanged.connect(self._on_broker_status_changed)
 
+        # Wire up dynamic Tray Menu updates to state changes
+        self.profilesChanged.connect(self.notifier.update_menu)
+        self.currentProfileChanged.connect(self.notifier.update_menu)
+        self.connectionStateChanged.connect(self.notifier.update_menu)
+        self.clusterDataChanged.connect(self.notifier.update_menu)
+        self.healthDataChanged.connect(self.notifier.update_menu)
+        self.maintenanceDataChanged.connect(self.notifier.update_menu)
+        self.busyStateChanged.connect(self.notifier.update_menu)
+
         # Load initial profiles from database
         self.refresh_profiles_internal()
+
+    def set_root_window(self, window: Any) -> None:
+        """Exposes the main application window to the NotificationManager for tray actions."""
+        self.notifier.set_window(window)
 
     def _on_broker_connection_lost(self, node_id: int, host: str, reason: str):
         title = f"⚠️ Redpanda Alert: Broker {node_id} Disconnected"
