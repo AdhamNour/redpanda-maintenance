@@ -33,6 +33,18 @@ ApplicationWindow {
         onTriggered: window.toastVisible = false
     }
 
+    function syncProfilePicker() {
+        if (!appController.profiles || !appController.currentProfile) return;
+        for (var i = 0; i < appController.profiles.length; i++) {
+            if (appController.profiles[i].id === appController.currentProfile.id) {
+                if (profilePicker.currentIndex !== i) {
+                    profilePicker.currentIndex = i;
+                }
+                return;
+            }
+        }
+    }
+
     Connections {
         target: appController
         function onLogAppended(timestamp, level, message) {
@@ -47,6 +59,12 @@ ApplicationWindow {
             window.toastCopied = false;
             window.toastVisible = true;
             toastTimer.restart();
+        }
+        function onCurrentProfileChanged() {
+            window.syncProfilePicker();
+        }
+        function onProfilesChanged() {
+            window.syncProfilePicker();
         }
     }
 

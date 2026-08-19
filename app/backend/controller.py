@@ -202,17 +202,63 @@ class AppController(QObject):
         self.refresh_profiles_internal()
 
     @Slot(int)
-    def selectProfile(self, profile_id: int):
+    @Slot(int, bool)
+    def selectProfile(self, profile_id: int, auto_connect: Optional[bool] = None):
         profile = self.db.get_profile(profile_id)
-        if profile:
+        if not profile:
+            self._log("ERROR", f"Profile ID {profile_id} not found.")
+            return
+
+        is_same_profile = (self._current_profile and self._current_profile.get("id") == profile_id)
+        was_connected = self._is_connected
+
+        if not is_same_profile:
+            # 1. Stop background monitoring & disconnect previous SSH session
+            self.monitor.stop_monitoring()
+            self.ssh.disconnect()
+            self._is_connected = False
+            self._connection_status = "Disconnected"
+
+            # 2. Reset cluster state variables
+            self._brokers = []
+            self._controller_broker = {}
+            self._health_info = {
+                "is_healthy": True,
+                "status_text": "UNKNOWN",
+                "under_replicated_partitions": 0,
+                "leaderless_partitions": 0,
+                "offline_partitions": 0,
+                "raw_output": ""
+            }
+            self._maintenance_list = []
+
+            # 3. Update current profile
+            self._current_profile = profile
+
+            # 4. Emit all state change signals so QML Dashboard and other views immediately update
+            self.currentProfileChanged.emit()
+            self.connectionStateChanged.emit()
+            self.clusterDataChanged.emit()
+            self.healthDataChanged.emit()
+            self.maintenanceDataChanged.emit()
+
+            self._log("INFO", f"Switched cluster profile to '{profile.get('name')}' ({profile.get('host')}:{profile.get('port', 22)})")
+
+            # 5. Connect if previously connected or explicitly requested
+            should_connect = auto_connect if auto_connect is not None else was_connected
+            if should_connect:
+                self.connectCurrentProfile()
+        else:
             self._current_profile = profile
             self.currentProfileChanged.emit()
+            if auto_connect is True and not self._is_connected:
+                self.connectCurrentProfile()
 
     @Slot(dict, result=int)
     def addProfile(self, profile_data: dict) -> int:
         new_id = self.db.add_profile(profile_data)
         self.refresh_profiles_internal()
-        self.selectProfile(new_id)
+        self.selectProfile(new_id, False)
         self._log("SUCCESS", f"Created profile: {profile_data.get('name')}")
         return new_id
 
@@ -225,6 +271,30 @@ class AppController(QObject):
 
     @Slot(int, result=bool)
     def deleteProfile(self, profile_id: int) -> bool:
+        is_current = (self._current_profile and self._current_profile.get("id") == profile_id)
+        if is_current:
+            self.monitor.stop_monitoring()
+            self.ssh.disconnect()
+            self._is_connected = False
+            self._connection_status = "Disconnected"
+            self._brokers = []
+            self._controller_broker = {}
+            self._health_info = {
+                "is_healthy": True,
+                "status_text": "UNKNOWN",
+                "under_replicated_partitions": 0,
+                "leaderless_partitions": 0,
+                "offline_partitions": 0,
+                "raw_output": ""
+            }
+            self._maintenance_list = []
+            self._current_profile = {}
+            self.currentProfileChanged.emit()
+            self.connectionStateChanged.emit()
+            self.clusterDataChanged.emit()
+            self.healthDataChanged.emit()
+            self.maintenanceDataChanged.emit()
+
         ok = self.db.delete_profile(profile_id)
         self.refresh_profiles_internal()
         self._log("INFO", f"Deleted profile ID: {profile_id}")
@@ -261,7 +331,21 @@ class AppController(QObject):
         self.ssh.disconnect()
         self._is_connected = False
         self._connection_status = "Disconnected"
+        self._brokers = []
+        self._controller_broker = {}
+        self._health_info = {
+            "is_healthy": True,
+            "status_text": "UNKNOWN",
+            "under_replicated_partitions": 0,
+            "leaderless_partitions": 0,
+            "offline_partitions": 0,
+            "raw_output": ""
+        }
+        self._maintenance_list = []
         self.connectionStateChanged.emit()
+        self.clusterDataChanged.emit()
+        self.healthDataChanged.emit()
+        self.maintenanceDataChanged.emit()
         self._log("INFO", "Disconnected from SSH host.")
 
     @Slot()

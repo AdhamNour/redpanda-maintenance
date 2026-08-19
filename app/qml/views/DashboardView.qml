@@ -177,7 +177,9 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 Text {
-                    text: "Cluster Brokers & Nodes"
+                    text: appController.currentProfile && appController.currentProfile.name
+                          ? "Cluster Brokers & Nodes (" + appController.currentProfile.name + ")"
+                          : "Cluster Brokers & Nodes"
                     color: "#FFFFFF"
                     font.pixelSize: 18
                     font.bold: true
@@ -211,7 +213,11 @@ Item {
                     }
                     Text {
                         Layout.alignment: Qt.AlignHCenter
-                        text: appController.isConnected ? "No brokers discovered yet." : "Not Connected to Redpanda Cluster"
+                        text: appController.isConnected
+                              ? "No brokers discovered yet."
+                              : (appController.currentProfile && appController.currentProfile.name
+                                 ? "Not Connected to " + appController.currentProfile.name
+                                 : "Not Connected to Redpanda Cluster")
                         color: "#FFFFFF"
                         font.pixelSize: 16
                         font.bold: true
@@ -220,7 +226,9 @@ Item {
                         Layout.alignment: Qt.AlignHCenter
                         text: appController.isConnected
                               ? "Click 'Refresh Data' to query rpk cluster info."
-                              : "Select a profile from the top bar and click 'Connect' to manage the cluster."
+                              : (appController.currentProfile && appController.currentProfile.host
+                                 ? "Click 'Connect' in the top bar to connect to " + appController.currentProfile.host + ":" + (appController.currentProfile.port || 22)
+                                 : "Select a profile from the top bar and click 'Connect' to manage the cluster.")
                         color: "#A1A1AA"
                         font.pixelSize: 13
                     }

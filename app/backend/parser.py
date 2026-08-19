@@ -98,8 +98,8 @@ def parse_maintenance_status(output: str) -> List[Dict[str, Any]]:
             finished = finished_str in ("true", "yes", "1")
 
             # finished=true means draining completed → node is fully IN MAINTENANCE
-            # enabled=true, finished=false means still redistributing partitions
-            if enabled and finished:
+            # enabled or draining=true, finished=false means still redistributing partitions
+            if finished:
                 status_label = "IN MAINTENANCE"
             elif enabled and not finished:
                 status_label = "DRAINING"
@@ -108,7 +108,7 @@ def parse_maintenance_status(output: str) -> List[Dict[str, Any]]:
 
             results.append({
                 "node_id": node_id,
-                "enabled": enabled,
+                "enabled": enabled or finished,
                 "draining": enabled and not finished,
                 "finished": finished,
                 "status": status_label,

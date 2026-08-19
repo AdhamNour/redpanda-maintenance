@@ -146,5 +146,80 @@ NODE-ID  DRAINING  FINISHED  ERRORS
         self.assertEqual(status_list[2]["status"], "ACTIVE")
 
 
+from unittest.mock import MagicMock, patch
+from PySide6.QtCore import QCoreApplication
+from app.backend.controller import AppController
+
+
+class TestAppControllerProfileSwitching(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        if QCoreApplication.instance() is None:
+            cls.app = QCoreApplication([])
+        else:
+            cls.app = QCoreApplication.instance()
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.db_path = Path(self.temp_dir.name) / "test_ctrl_pandapilot.db"
+        self.db = DatabaseManager(self.db_path)
+
+        self.p1_id = self.db.add_profile({
+            "name": "Cluster Alpha",
+            "host": "10.0.0.1",
+            "port": 22,
+            "ssh_user": "root"
+        })
+        self.p2_id = self.db.add_profile({
+            "name": "Cluster Beta",
+            "host": "10.0.0.2",
+            "port": 22,
+            "ssh_user": "admin"
+        })
+
+        self.controller = AppController(self.db)
+
+    def tearDown(self):
+        self.controller.monitor.stop_monitoring()
+        self.temp_dir.cleanup()
+
+    def test_select_profile_resets_cluster_data_and_emits_signals(self):
+        # Setup initial fake cluster state on Cluster Alpha
+        self.controller._is_connected = True
+        self.controller._connection_status = "Connected"
+        self.controller._brokers = [{"id": 0, "host": "10.0.0.1", "port": 9092}]
+        self.controller._controller_broker = {"id": 0}
+        self.controller._health_info = {"is_healthy": True, "status_text": "HEALTHY"}
+        self.controller._maintenance_list = [{"node_id": 0, "status": "ACTIVE"}]
+
+        profile_changed_called = []
+        cluster_changed_called = []
+        conn_changed_called = []
+
+        self.controller.currentProfileChanged.connect(lambda: profile_changed_called.append(True))
+        self.controller.clusterDataChanged.connect(lambda: cluster_changed_called.append(True))
+        self.controller.connectionStateChanged.connect(lambda: conn_changed_called.append(True))
+
+        # Switch to Cluster Beta with auto_connect=False
+        self.controller.selectProfile(self.p2_id, auto_connect=False)
+
+        self.assertEqual(self.controller.currentProfile["id"], self.p2_id)
+        self.assertEqual(self.controller.currentProfile["name"], "Cluster Beta")
+        self.assertFalse(self.controller.isConnected)
+        self.assertEqual(len(self.controller.brokers), 0)
+        self.assertEqual(self.controller.controllerBroker, {})
+        self.assertEqual(len(self.controller.maintenanceList), 0)
+
+        self.assertTrue(len(profile_changed_called) > 0)
+        self.assertTrue(len(cluster_changed_called) > 0)
+        self.assertTrue(len(conn_changed_called) > 0)
+
+    def test_select_profile_auto_reconnect_when_connected(self):
+        self.controller._is_connected = True
+        with patch.object(self.controller, "connectCurrentProfile") as mock_connect:
+            self.controller.selectProfile(self.p2_id)
+            mock_connect.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
